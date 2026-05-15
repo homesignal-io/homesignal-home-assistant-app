@@ -1,0 +1,112 @@
+{
+  "message_type": "telemetry",
+  "schema_type": "device.health_snapshot",
+  "schema_version": 1,
+  "message_id": "01J00000000000000000000001",
+  "applied_publish_policy_version": "ppv_01J00000000000000000000000",
+  "observed_at": "2026-05-14T13:00:00Z",
+  "payload": {
+    "agent": {
+      "status": "degraded",
+      "version": "0.1.3",
+      "uptime_seconds": 90000,
+      "cloud_connection": {
+        "agent_https_reachable": true,
+        "aws_iot_connected": false,
+        "last_success_at": "2026-05-14T12:40:00Z",
+        "last_failure_at": "2026-05-14T12:58:00Z"
+      },
+      "publish_policy": {
+        "applied_version": "ppv_01J00000000000000000000000",
+        "issued_at": "2026-05-14T00:00:00Z",
+        "refresh_after": "2026-05-15T00:00:00Z",
+        "expires_at": "2026-05-21T00:00:00Z",
+        "status": "current"
+      },
+      "update": {
+        "status": "available",
+        "current_version": "0.1.3",
+        "desired_version": "0.1.4",
+        "channel": "stable",
+        "last_checked_at": "2026-05-14T12:55:00Z",
+        "last_failure_reason": null
+      },
+      "suppression_counts": [
+        {
+          "signal": "runtime_log_summary",
+          "reason": "over_budget",
+          "count": 9,
+          "window_started_at": "2026-05-14T12:00:00Z",
+          "window_ended_at": "2026-05-14T13:00:00Z"
+        }
+      ]
+    },
+    "home_assistant": {
+      "core": {
+        "status": "reachable",
+        "version": "2026.5.1",
+        "last_seen_at": "2026-05-14T12:59:30Z"
+      },
+      "supervisor": {
+        "status": "reachable",
+        "version": "2026.05.0",
+        "last_seen_at": "2026-05-14T12:59:30Z"
+      },
+      "backup": {
+        "status": "failing",
+        "last_success_at": "2026-05-13T03:00:00Z",
+        "last_failure_at": "2026-05-14T03:00:00Z",
+        "last_failure_reason": "backup_timeout",
+        "in_progress": false
+      },
+      "storage": {
+        "status": "warning",
+        "used_percent": 91.2,
+        "free_bytes": 2147483648,
+        "last_checked_at": "2026-05-14T12:59:30Z"
+      }
+    },
+    "addons": [
+      {
+        "addon_id": null,
+        "slug": "alarm_bridge",
+        "display_name": "Alarm Bridge",
+        "repository": "local",
+        "status": "degraded",
+        "version": "1.2.3",
+        "enabled": true,
+        "last_seen_at": "2026-05-14T12:52:00Z",
+        "update": {
+          "status": "available",
+          "current_version": "1.2.3",
+          "latest_version": "1.2.4"
+        },
+        "health": {
+          "state": "degraded",
+          "reasons": ["reconnect_backoff"]
+        },
+        "activity": {
+          "events_processed_last_hour": 17,
+          "last_event_at": "2026-05-14T12:51:44Z"
+        }
+      }
+    ],
+    "runtime_log_summary": [
+      {
+        "level": "warning",
+        "source": "home_assistant",
+        "component": "backup",
+        "reason_code": "backup_timeout",
+        "occurrence_count": 1,
+        "first_seen_at": "2026-05-14T03:00:00Z",
+        "last_seen_at": "2026-05-14T03:00:00Z",
+        "sample_message": "Backup timed out before completion",
+        "diagnostic_excerpt": "Backup timed out after 30 minutes.",
+        "diagnostic_excerpt_truncated": false,
+        "more_logs_available": true,
+        "local_artifact_ref": "logref_01J00000000000000000000001",
+        "suppressed_count": 9
+      }
+    ]
+  }
+}

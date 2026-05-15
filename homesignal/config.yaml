@@ -19,5 +19,13 @@ ingress_entry: /
 panel_title: HomeSignal
 panel_icon: mdi:home-assistant
 timeout: 300
-options: {}
-schema: {}
+options:
+  cloud_base_url: ""
+  aws_iot_endpoint: ""
+  aws_region: ""
+  fleet_provisioning_template: ""
+schema:
+  cloud_base_url: str?
+  aws_iot_endpoint: str?
+  aws_region: str?
+  fleet_provisioning_template: str?

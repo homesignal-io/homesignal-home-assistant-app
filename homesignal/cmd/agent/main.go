@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +40,7 @@ type OptionsState struct {
 }
 
 type RuntimeState struct {
-	Identity        DeviceIdentity
+	Enrollment      *EnrollmentManager
 	Options         OptionsState
 	SupervisorToken bool
 	CoreAPI         CoreAPIClient
@@ -54,15 +52,18 @@ type CoreAPIClient struct {
 }
 
 type readyResponse struct {
-	Ready           bool   `json:"ready"`
-	Degraded        bool   `json:"degraded"`
-	InstallationID  string `json:"installation_id,omitempty"`
-	OptionsLoaded   bool   `json:"options_loaded"`
-	SupervisorToken bool   `json:"supervisor_token"`
-	CoreAPIBaseURL  string `json:"core_api_base_url"`
-	Status          string `json:"status"`
-	Version         string `json:"version"`
-	DegradedReason  string `json:"degraded_reason,omitempty"`
+	Ready                    bool     `json:"ready"`
+	Degraded                 bool     `json:"degraded"`
+	InstallationID           string   `json:"installation_id,omitempty"`
+	OptionsLoaded            bool     `json:"options_loaded"`
+	SupervisorToken          bool     `json:"supervisor_token"`
+	CoreAPIBaseURL           string   `json:"core_api_base_url"`
+	Status                   string   `json:"status"`
+	Version                  string   `json:"version"`
+	ClaimState               string   `json:"claim_state"`
+	EnrollmentDegradedReason string   `json:"enrollment_degraded_reason,omitempty"`
+	DegradedReason           string   `json:"degraded_reason,omitempty"`
+	DegradedReasons          []string `json:"degraded_reasons,omitempty"`
 }
 
 func main() {
@@ -73,6 +74,10 @@ func main() {
 		logger.Error("failed to initialize agent", "error", err)
 		os.Exit(1)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	state.Enrollment.Start(ctx, logger)
 
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
@@ -86,7 +91,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("homesignal agent ready", "addr", addr, "installation_id", state.Identity.InstallationID)
+		logger.Info("homesignal agent ready", "addr", addr, "installation_id", state.Enrollment.Snapshot().InstallationID)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("http server failed", "error", err)
 			os.Exit(1)
@@ -96,26 +101,29 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
+	cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Error("http server shutdown failed", "error", err)
 		os.Exit(1)
 	}
 }
 
 func loadRuntimeState(configDir, dataDir, supervisorToken string) (RuntimeState, error) {
+	return loadRuntimeStateWithClients(configDir, dataDir, supervisorToken, nil, nil, time.Now)
+}
+
+func loadRuntimeStateWithClients(configDir, dataDir, supervisorToken string, enrollmentClient HomeSignalEnrollmentClient, provisioner FleetProvisioningClient, now func() time.Time) (RuntimeState, error) {
 	if configDir == "" {
 		configDir = defaultConfigDir
 	}
 	if dataDir == "" {
 		dataDir = defaultDataDir
 	}
-
-	identity, err := ensureIdentity(filepath.Join(configDir, "device.json"))
-	if err != nil {
-		return RuntimeState{}, err
+	if now == nil {
+		now = time.Now
 	}
 
 	options, err := loadOptions(filepath.Join(dataDir, "options.json"))
@@ -123,9 +131,32 @@ func loadRuntimeState(configDir, dataDir, supervisorToken string) (RuntimeState,
 		return RuntimeState{}, err
 	}
 
+	enrollmentConfig := loadEnrollmentConfig(options)
+	if enrollmentClient == nil && enrollmentConfig.HomeSignalAPIBaseURL != "" {
+		enrollmentClient = NewHTTPHomeSignalClient(enrollmentConfig.HomeSignalAPIBaseURL)
+	}
+	if provisioner == nil {
+		provisioner = UnsupportedFleetProvisioningClient{}
+	}
+
+	record, err := loadDeviceRecord(filepath.Join(configDir, "device.json"), now().UTC())
+	if err != nil {
+		return RuntimeState{}, err
+	}
+
+	enrollment := NewEnrollmentManager(EnrollmentManagerConfig{
+		ConfigDir:        configDir,
+		DeviceRecordPath: filepath.Join(configDir, "device.json"),
+		Config:           enrollmentConfig,
+		Client:           enrollmentClient,
+		Provisioner:      provisioner,
+		Now:              now,
+		Record:           record,
+	})
+
 	hasToken := supervisorToken != ""
 	return RuntimeState{
-		Identity:        identity,
+		Enrollment:      enrollment,
 		Options:         options,
 		SupervisorToken: hasToken,
 		CoreAPI: CoreAPIClient{
@@ -136,57 +167,14 @@ func loadRuntimeState(configDir, dataDir, supervisorToken string) (RuntimeState,
 }
 
 func ensureIdentity(path string) (DeviceIdentity, error) {
-	existing, err := os.ReadFile(path)
-	if err == nil {
-		var identity DeviceIdentity
-		if err := json.Unmarshal(existing, &identity); err != nil {
-			return DeviceIdentity{}, fmt.Errorf("read identity: %w", err)
-		}
-		if identity.InstallationID == "" {
-			return DeviceIdentity{}, fmt.Errorf("read identity: installation_id is empty")
-		}
-		return identity, nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return DeviceIdentity{}, fmt.Errorf("read identity: %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return DeviceIdentity{}, fmt.Errorf("create identity directory: %w", err)
-	}
-
-	identity := DeviceIdentity{
-		InstallationID: newInstallationID(),
-		CreatedAt:      time.Now().UTC(),
-	}
-
-	payload, err := json.MarshalIndent(identity, "", "  ")
+	record, err := loadDeviceRecord(path, time.Now().UTC())
 	if err != nil {
-		return DeviceIdentity{}, fmt.Errorf("encode identity: %w", err)
+		return DeviceIdentity{}, err
 	}
-	payload = append(payload, '\n')
-
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
-		return DeviceIdentity{}, fmt.Errorf("write identity: %w", err)
-	}
-
-	return identity, nil
-}
-
-func newInstallationID() string {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(fmt.Sprintf("generate installation id: %v", err))
-	}
-	b[6] = (b[6] & 0x0f) | 0x40
-	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%s-%s-%s-%s-%s",
-		hex.EncodeToString(b[0:4]),
-		hex.EncodeToString(b[4:6]),
-		hex.EncodeToString(b[6:8]),
-		hex.EncodeToString(b[8:10]),
-		hex.EncodeToString(b[10:16]),
-	)
+	return DeviceIdentity{
+		InstallationID: record.InstallationID,
+		CreatedAt:      record.CreatedAt,
+	}, nil
 }
 
 func loadOptions(path string) (OptionsState, error) {
@@ -212,6 +200,7 @@ func newRouter(state RuntimeState) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
 	mux.HandleFunc("/readyz", readyHandler(state))
+	mux.HandleFunc("/status", statusHandler(state))
 	mux.HandleFunc("/version", versionHandler)
 	mux.HandleFunc("/ui", uiHandler(state))
 	ui := uiHandler(state)
@@ -239,23 +228,38 @@ func readyHandler(state RuntimeState) http.HandlerFunc {
 }
 
 func readiness(state RuntimeState) readyResponse {
-	degraded := !state.SupervisorToken
-	reason := ""
+	snapshot := state.Enrollment.Snapshot()
+	reasons := []string{}
+	if !state.SupervisorToken {
+		reasons = append(reasons, "SUPERVISOR_TOKEN is not present; Supervisor and Core API calls are disabled")
+	}
+	reasons = append(reasons, snapshot.DegradedReasons...)
+
+	degraded := len(reasons) > 0
 	status := "ready"
 	if degraded {
 		status = "degraded"
-		reason = "SUPERVISOR_TOKEN is not present; Supervisor and Core API calls are disabled"
 	}
+
 	return readyResponse{
-		Ready:           true,
-		Degraded:        degraded,
-		InstallationID:  state.Identity.InstallationID,
-		OptionsLoaded:   state.Options.Present,
-		SupervisorToken: state.SupervisorToken,
-		CoreAPIBaseURL:  state.CoreAPI.BaseURL,
-		Status:          status,
-		Version:         version,
-		DegradedReason:  reason,
+		Ready:                    true,
+		Degraded:                 degraded,
+		InstallationID:           snapshot.InstallationID,
+		OptionsLoaded:            state.Options.Present,
+		SupervisorToken:          state.SupervisorToken,
+		CoreAPIBaseURL:           state.CoreAPI.BaseURL,
+		Status:                   status,
+		Version:                  version,
+		ClaimState:               string(snapshot.ClaimState),
+		EnrollmentDegradedReason: strings.Join(snapshot.DegradedReasons, "; "),
+		DegradedReason:           strings.Join(reasons, "; "),
+		DegradedReasons:          reasons,
+	}
+}
+
+func statusHandler(state RuntimeState) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, newStatusResponse(state.Enrollment.Snapshot()))
 	}
 }
 
@@ -271,7 +275,8 @@ func uiHandler(state RuntimeState) http.HandlerFunc {
 	tmpl := template.Must(template.New("ui").Parse(uiHTML))
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := tmpl.Execute(w, readiness(state)); err != nil {
+		view := newUIView(state.Enrollment.Snapshot(), readiness(state))
+		if err := tmpl.Execute(w, view); err != nil {
 			http.Error(w, "failed to render status page", http.StatusInternalServerError)
 		}
 	}
@@ -282,39 +287,3 @@ func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }
-
-const uiHTML = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HomeSignal</title>
-  <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; padding: 2rem; background: Canvas; color: CanvasText; }
-    main { max-width: 720px; margin: 0 auto; }
-    h1 { margin: 0 0 0.5rem; font-size: 1.75rem; }
-    .status { display: inline-block; margin: 1rem 0; padding: 0.35rem 0.65rem; border-radius: 0.4rem; border: 1px solid ButtonBorder; }
-    dl { display: grid; grid-template-columns: minmax(8rem, 14rem) 1fr; gap: 0.75rem 1rem; }
-    dt { font-weight: 650; }
-    dd { margin: 0; overflow-wrap: anywhere; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>HomeSignal</h1>
-    <p>Home Assistant add-on status and pairing placeholder.</p>
-    <div class="status">{{ .Status }}</div>
-    <dl>
-      <dt>Installation ID</dt><dd><code>{{ .InstallationID }}</code></dd>
-      <dt>Version</dt><dd><code>{{ .Version }}</code></dd>
-      <dt>Options loaded</dt><dd>{{ .OptionsLoaded }}</dd>
-      <dt>Supervisor token</dt><dd>{{ .SupervisorToken }}</dd>
-      <dt>Core API</dt><dd><code>{{ .CoreAPIBaseURL }}</code></dd>
-      {{ if .DegradedReason }}<dt>Degraded reason</dt><dd>{{ .DegradedReason }}</dd>{{ end }}
-    </dl>
-  </main>
-</body>
-</html>
-`

@@ -1,2 +1,9 @@
+.DS_Store
 */.local/
 */bin/
+backend/dist/
+design-mock/dist/
+design-mock/node_modules/
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*

@@ -1,6 +1,6 @@
 # HomeSignal
 
-HomeSignal is a local-build Home Assistant add-on skeleton for the HomeSignal agent. This first version only provides local identity, status endpoints, an ingress placeholder UI, and Supervisor/Core API permission wiring.
+HomeSignal is a local-build Home Assistant add-on skeleton for the HomeSignal agent. This version provides local identity, enrollment state, status endpoints, an ingress UI, and Supervisor/Core API permission wiring.
 
 ## Install Locally
 
@@ -16,8 +16,9 @@ This skeleton intentionally omits a production `image` field in `config.yaml`, s
 
 - `/healthz`: process liveness.
 - `/readyz`: identity/config readiness and degraded Supervisor/Core API status.
+- `/status`: local enrollment state and non-secret device metadata.
 - `/version`: build metadata.
-- `/ui`: basic Home Assistant ingress placeholder page.
+- `/ui`: Home Assistant ingress page showing pairing, claimed, or revoked state.
 
 ## Permissions
 
@@ -39,8 +40,8 @@ The agent stores add-on-owned data in `/config`, backed by Home Assistant's `add
 /config/device.json
 ```
 
-The file contains a generated `installation_id` and is reused across restarts.
+The file contains a generated `installation_id`, enrollment state, and non-secret credential metadata. Poll tokens, private keys, certificates, and temporary AWS claim material are stored separately as `0600` files under add-on-owned `/config` subdirectories and are not exposed through JSON endpoints.
 
 ## Current Limitations
 
-This release does not implement enrollment, cloud authentication, telemetry, topology discovery, backup actions, update orchestration, IoT Core, or command execution.
+This release implements the add-on side of enrollment and documents the future cloud/AWS IoT Core contract in `design-docs/enrollment-claiming-contract.md`. It does not implement the SaaS backend, portal UI, MQTT runtime, telemetry, topology discovery, backup actions, update orchestration, full release flow, or command execution.

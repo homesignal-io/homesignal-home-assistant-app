@@ -15,3 +15,30 @@ homesignal
 ```
 
 See `homesignal/README.md` for install and development notes.
+
+## First Staging Deploy
+
+The first deployable backend slice is the Go control-plane skeleton in
+`backend/`. It exposes only operational endpoints:
+
+```text
+GET /healthz
+GET /readyz
+GET /version
+```
+
+The script entry points are:
+
+```bash
+scripts/test.sh
+scripts/build.sh
+scripts/deploy.sh staging
+scripts/smoke.sh staging
+scripts/logs.sh staging
+```
+
+The staging deploy is pinned to AWS `us-east-1`. Before running
+`scripts/deploy.sh staging`, use a named AWS deploy principal and provide either
+`HOMESIGNAL_BUDGET_ALERT_EMAIL` so Terraform can create the staging budget
+guardrail, or `HOMESIGNAL_BUDGET_GUARDRAIL_CONFIRMED=1` if the guardrail already
+exists.

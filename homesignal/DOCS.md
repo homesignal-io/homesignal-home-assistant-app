@@ -8,9 +8,21 @@ The container does not request privileged mode, host networking, Docker access, 
 
 ## Identity
 
-On startup, the agent ensures `/config/device.json` exists. If the file is missing, it writes a generated UUIDv4-style `installation_id`. If the file exists, the existing ID is reused.
+On startup, the agent ensures `/config/device.json` exists. If the file is missing, it writes a generated UUIDv4-style `installation_id` and schema-v2 enrollment metadata. If the file exists, the existing ID is reused and legacy identity-only files are migrated.
 
 The add-on uses only the `addon_config:rw` mapping for persistent add-on-owned files. There is no fallback to broad Home Assistant config mounts.
+
+Enrollment secrets are kept outside `device.json` as `0600` files under add-on-owned `/config` subdirectories:
+
+```text
+/config/secrets/poll_token
+/config/secrets/aws_claim.crt
+/config/secrets/aws_claim.key
+/config/iot/device.key
+/config/iot/device.crt
+```
+
+`device.json` stores only metadata and file paths. Secret contents are not returned by `/status`, `/readyz`, or `/ui`.
 
 ## Options
 
@@ -32,4 +44,6 @@ The token is never displayed, persisted, or required for local boot. Missing tok
 
 `/healthz` reports process liveness.
 
-`/readyz` reports initialized local state and Supervisor/Core API availability. Missing `SUPERVISOR_TOKEN` returns HTTP 200 with `degraded: true`; local storage or identity initialization failures prevent startup.
+`/readyz` reports initialized local state, enrollment state, and Supervisor/Core API availability. Missing `SUPERVISOR_TOKEN` returns HTTP 200 with `degraded: true`; local storage or identity initialization failures prevent startup.
+
+`/status` reports local enrollment state and non-secret metadata such as `installation_id`, `claim_state`, pairing-code expiry, configured cloud endpoint status, `device_id`, and IoT Thing name. It never returns pairing codes, poll tokens, private keys, certificate contents, or temporary AWS claim material.

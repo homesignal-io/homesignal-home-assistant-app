@@ -1,12 +1,24 @@
 HomeSignal Edge Device Management Requirements
 
+Canonical note:
+This is a broad requirements sketch. When it conflicts with current service
+architecture, the canonical docs win: `service-map.md`,
+`workstreams/device-lifecycle.md`, `api-facade.md`,
+`aws-iot-routing-contract.md`, `telemetry-ingest-architecture.md`,
+`edge-state-adapter.md`, `command-lifecycle.md`, and
+`artifact-upload-broker.md`.
+
 1. Core Architecture
 
 System must use an outbound-only agent model.
 
 Home Assistant host runs HomeSignal Manager add-on.
 
-Agent communicates with HomeSignal cloud over HTTPS/WSS.
+Claimed-device runtime uses AWS IoT Core for command notices, notifications,
+lifecycle presence, and compact edge state. Agent HTTPS with mTLS handles
+telemetry/events, command ACK/results, artifact negotiation, and other approved
+post-claim request/response flows. WebSocket/WSS is not a v0 default transport
+unless a later spec explicitly introduces it.
 
 No inbound ports required.
 
@@ -16,7 +28,7 @@ Remote access is optional and separately configured.
 
 Postgres is the canonical source of truth.
 
-WebSocket gateway is transport only, not authority.
+If a WebSocket gateway is introduced later, it is transport only, not authority.
 
 
 2. Device Identity
@@ -42,16 +54,17 @@ agent installation
 Unclaimed devices must not receive operational commands.
 
 Claiming requires:
-valid provisioning session
+valid site-bound claim invite
 logged-in authorized integrator
-short-lived pairing code
+local add-on verification of the claim invite details
+local add-on confirmation after verification
 device-reported unclaimed state
 
-Provisioning sessions must expire.
+Claim invites must expire.
 
-Pairing codes must be single-use.
+Claim invite codes must be single-use.
 
-Backend must prevent already-claimed devices from being silently re-claimed.
+Backend must prevent already-claimed devices from being silently claimed again.
 
 Claiming must create durable credentials.
 
@@ -60,7 +73,7 @@ Temporary claim credentials must be discarded after enrollment.
 Claim flow must support stock Home Assistant installs without preloaded hardware.
 
 
-4. Release / Transfer
+4. Release / Transfer / Fresh Claim
 
 System must support release of a device from a site.
 
@@ -72,14 +85,21 @@ Released device returns to unclaimed state.
 
 Offline release must still revoke cloud access.
 
-Transfer must be separate from release.
+Transfer must be separate from release and fresh claim.
 
-Transfer preserves history while changing controlling account/site ownership.
+A fresh claim creates a new HomeSignal `device_id` and does not migrate history.
+The old cloud record remains under the original account/site authority and should
+appear disconnected when old credentials stop reporting. Any future transfer
+feature that changes controlling account/site ownership while preserving or
+copying history must be an explicit product flow, not an implication of claim,
+release, or local reset.
 
 
-5. Device Twin / Desired vs Reported State
+5. Edge State Adapter / Desired vs Reported State
 
-System must maintain desired state and reported state.
+System must maintain compact desired and reported edge state.
+
+Use `edge-state-adapter.md`, `workstreams/state-change-and-policy-propagation.md`, and `command-lifecycle.md` as the canonical model. V0 uses AWS IoT named shadows through the Edge State Adapter for compact desired/reported edge state. Durable intended state and bounded commands are separate concepts. Commands should be generated from desired-state changes only where local convergence requires a bounded attempt or repair.
 
 Desired state examples:
 required agent version
@@ -102,27 +122,30 @@ last heartbeat
 integration health
 remote access configured/not configured
 
-System must compute drift:
+System should compute convergence/drift where desired-state convergence matters:
 desired != reported
 
-Drift must appear in dashboard.
+Drift/convergence details are internal/support-visible in v0. Customer-facing
+UI may later show simple health/status, but detailed degraded/convergence UX is
+not productized until a UI/product spec defines it.
 
-Commands should be generated from desired-state changes where appropriate.
-
-Device twin must be stored in HomeSignal database, not only in memory.
+HomeSignal database stores product truth and compact edge-state projections. It must not mirror whole AWS IoT shadow documents by default. A future HomeSignal Device Twin service can replace the Edge State Adapter later if AWS shadows stop fitting the product.
 
 
 6. Heartbeat / Presence
 
 Agent must send periodic heartbeat.
 
-Heartbeat includes:
+Routine health/presence facts include:
 device ID
 agent version
 HA version summary
 health summary
 timestamp
 connection/session ID
+
+Connection/session identifiers are operational provenance only. Product joins
+use durable `device_id`, which equals AWS IoT Thing name for claimed devices.
 
 Backend must track:
 last_seen_at
@@ -131,7 +154,8 @@ degraded
 stale
 released/revoked
 
-Online state must be derived from recent heartbeat/socket state.
+Online state must be derived from AWS IoT lifecycle/presence and recent
+telemetry or health facts, not from payload claims alone.
 
 System must tolerate missed heartbeats without immediate false alarms.
 
@@ -140,15 +164,17 @@ Reconnects must use backoff and jitter.
 
 7. Command Lifecycle
 
-Commands must have durable lifecycle states:
+Commands follow `command-lifecycle.md` as the canonical lifecycle:
 queued
-delivered
-accepted
-running
+sent
+ack_accepted
+ack_rejected
+ack_timed_out
+running/progress, when command-specific
 succeeded
 failed
-expired
-cancelled
+timed_out
+canceled
 
 Every command must have:
 command_id
@@ -162,7 +188,7 @@ status
 result
 audit metadata
 
-Agent must ACK command receipt.
+Agent must ACK accepted or rejected within the command ACK window, not merely receipt. See `command-lifecycle.md`.
 
 Agent must report command result.
 
@@ -175,22 +201,20 @@ Agent must reject unknown command types.
 Dangerous commands require stronger confirmation.
 
 
-8. Supported MVP Commands
+8. Supported MVP Command Families
 
-request diagnostics
+request bounded HomeSignal diagnostics
 trigger backup
-restart HomeSignal add-on
-refresh state
-check updates
-report installed add-ons
-report backup status
-release local credentials
-test remote access metadata
+refresh publish policy, when a bounded repair/acceleration attempt is required
+request update/apply-update status through the update architecture
+report backup status through telemetry/result paths
+release/revoke local credential cleanup where explicitly supported
+test remote access metadata, future
 
 Later:
 apply template
-stage update
-execute update
+future local-supervisor stage update
+future local-supervisor execute update
 restore backup
 install managed add-on
 
@@ -242,8 +266,10 @@ Device must detect revoked credential and enter safe state.
 
 Lost credential recovery requires re-pairing.
 
-Future option:
-device-generated keypair + signed device certificate / mTLS.
+V0 credential direction:
+device-generated private key, CSR submitted through HomeSignal claim flow, AWS
+IoT-signed device certificate returned to the add-on, and mTLS Agent HTTPS
+authorization by exact stored certificate fingerprint/serial.
 
 
 11. Access Control
@@ -308,9 +334,9 @@ retention policy
 backup size
 failure reason
 
-MVP may only monitor/trigger local HA backups.
-
-Later versions may support encrypted offsite backup.
+V0 supports local HA backup status/trigger flows and may store offsite Home
+Assistant backup bytes through the approved Artifact Upload Broker path under
+Backup Service ownership.
 
 
 14. Update Management
@@ -322,14 +348,16 @@ Supervisor update availability
 agent update availability
 managed add-on update availability
 
-System must support update policy:
+System must support HomeSignal add-on update intent/status policy:
 manual
 notify only
 approved window
 blocked version
 staged rollout
 
-MVP should not auto-update HA without explicit approval.
+For v0, HomeSignal does not initiate Home Assistant, Supervisor, OS, database,
+or arbitrary host updates. HomeSignal add-on installation remains governed by
+the Home Assistant Supervisor/add-on release path and local policy.
 
 
 15. Diagnostics
@@ -407,8 +435,9 @@ customers
 sites
 devices
 device_credentials
-provisioning_sessions
-device_reported_state
+device_claim_invites
+device_claim_verifications
+device_latest_state
 device_desired_state
 commands
 command_results
@@ -421,7 +450,7 @@ audit_events
 
 19. Alerts
 
-Initial alert types:
+Initial alert/status candidates:
 device offline
 heartbeat stale
 backup failed
@@ -433,7 +462,13 @@ credential revoked
 claim failed
 command failed
 
-Alerts must support:
+Product/customer alerting is not automatically implied by every candidate.
+For v0, Alerting Service owns customer-facing alert lifecycle for promoted
+product rules such as disconnected devices, backup failed/overdue, and
+add-on/update attention. Notification Service owns email delivery through the
+provider adapter. Platform Health findings remain internal/support-only in v0
+unless a product alert rule explicitly promotes a condition. Product alerts
+support:
 severity
 acknowledge
 resolve
@@ -454,7 +489,7 @@ No custom HAOS image required.
 
 No mandatory Tailscale.
 
-No AWS IoT Core unless architecture changes.
+AWS IoT Core is the planned claimed-device transport and edge-state surface.
 
 No high-frequency telemetry pipeline.
 
@@ -479,7 +514,7 @@ System can:
 securely enroll device
 prevent stale/replayed claims
 revoke device access
-track desired/reported state
-durably queue commands
+track desired/reported edge state
+durably track commands through the command lifecycle
 audit all sensitive operations
 operate without inbound network access

@@ -1,0 +1,24 @@
+{
+  "message_type": "event",
+  "schema_type": "agent_alarm",
+  "schema_version": 1,
+  "message_id": "01J00000000000000000000002",
+  "applied_publish_policy_version": "ppv_01J00000000000000000000000",
+  "observed_at": "2026-05-14T13:05:00Z",
+  "payload": {
+    "alarm_type": "publish_policy_apply_failed",
+    "severity": "warning",
+    "reason_code": "invalid_budget_window",
+    "occurrence_count": 1,
+    "first_seen_at": "2026-05-14T13:05:00Z",
+    "last_seen_at": "2026-05-14T13:05:00Z",
+    "attempted_policy_version": "ppv_01J00000000000000000000003",
+    "active_policy_version": "ppv_01J00000000000000000000000",
+    "command_id": "cmd_01J00000000000000000000000",
+    "diagnostic_excerpt": "Rejected publish policy because the event budget window was malformed.",
+    "diagnostic_excerpt_truncated": false,
+    "more_logs_available": true,
+    "local_artifact_ref": "logref_01J00000000000000000000002",
+    "suppressed_count": 0
+  }
+}

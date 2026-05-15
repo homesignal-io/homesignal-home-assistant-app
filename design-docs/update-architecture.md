@@ -313,7 +313,7 @@ Your edge agent should NOT:
 
 * contain business logic explosion
 * dynamically execute arbitrary AI code
-* become plugin spaghetti
+* become add-on spaghetti
 * host uncontrolled third-party extensions
 
 Because maintenance burden explodes.
@@ -383,7 +383,7 @@ You will eventually have:
 
 * old HA versions
 * old agent versions
-* old plugins
+* old add-on versions
 * incompatible APIs
 * abandoned installs
 
@@ -425,9 +425,48 @@ predictable operational behavior under failure.
 
 A core architectural principle of the platform is that update orchestration and local update execution are intentionally separated.
 
-The cloud control plane does not directly mutate devices. Instead, it publishes desired state and rollout intent. A lightweight local supervisor running on each managed site is responsible for safely converging the system toward that desired state.
+The cloud control plane does not directly mutate devices. Instead, it publishes desired state and rollout intent through the platform's desired-state boundary. For v0 edge state, that boundary is the Edge State Adapter around AWS IoT named shadows.
 
-This supervisor is our code and is treated as durable infrastructure rather than application logic.
+For v0 Home Assistant add-on updates, HomeSignal does not initiate the binary update through IoT Core. Release artifacts are published through the normal add-on release channel, such as the Home Assistant add-on repository/GitHub path, and the local Home Assistant Supervisor/add-on update mechanism performs the local install according to local policy. HomeSignal may publish desired version/channel intent, observe reported version and health, and surface update status, but the local supervisor/runtime remains the execution authority.
+
+Desired HomeSignal add-on version is a valid `homesignal_edge.update`
+shadow target. This is rollout intent and convergence tracking, not binary
+delivery. A typical release flow is:
+
+1. CI/CD publishes a new HomeSignal add-on version to the normal release
+   channel, such as the GitHub/Home Assistant add-on repository path.
+2. Release / Update Orchestrator records the version, channel, compatibility,
+   and rollout metadata in HomeSignal product state.
+3. When the release is promoted for a cohort, the Edge State Adapter writes the
+   desired add-on version/channel into `homesignal_edge.update`.
+4. The add-on reports its observed installed version/status back through the
+   compact shadow `reported.update` shape and/or the approved runtime status
+   path.
+5. HomeSignal compares desired vs reported state to see which devices took the
+   update, which are pending, which are blocked by local policy, and which
+   failed or rolled back.
+
+The shadow must not contain release artifacts, download URLs, signed URLs, or
+large release metadata. It should carry only compact desired/reportable facts
+needed for convergence.
+
+## Home Assistant Version Advisory
+
+Home Assistant Core version drift is a portal advisory in v0, not a cloud-driven
+update command and not an email alert by default.
+
+HomeSignal should maintain a small version-catalog adapter/cache for the latest
+stable Home Assistant Core version. The cache may be refreshed daily. Device
+latest-state reports the installed Home Assistant version; API read models may
+compare installed vs cached latest to show `ha_update_advisory`.
+
+If the catalog source is unavailable, stale, or ambiguous, the portal should
+hide the Home Assistant update advisory rather than warning the user from a weak
+source. HomeSignal does not initiate Home Assistant Core updates in v0.
+
+A lightweight HomeSignal local supervisor may become a later hardening layer. Until then, treat "supervisor" below as the local update authority pattern, not a separate v0 process.
+
+If introduced later, this supervisor would be HomeSignal code and should be treated as durable infrastructure rather than application logic.
 
 ### Architectural Split
 
@@ -437,6 +476,7 @@ Responsible for:
 - rollout cohorts/rings
 - desired version assignment
 - release channels (stable/candidate/dev)
+- promotion of a published add-on version into shadow desired state
 - rollout pause/resume
 - fleet visibility
 - telemetry aggregation
@@ -445,9 +485,9 @@ Responsible for:
 
 The cloud should never directly execute arbitrary remote commands against managed sites.
 
-#### Local Supervisor
-A stable local daemon responsible for:
-- polling desired state
+#### Future Local Supervisor
+A future stable local daemon would be responsible for:
+- reading desired state through the Edge State Adapter / AWS IoT shadow path
 - authenticating with the control plane
 - verifying signed artifacts
 - evaluating local update readiness
@@ -459,17 +499,17 @@ A stable local daemon responsible for:
 - buffering telemetry/logs while offline
 - exposing local diagnostics/recovery capabilities
 
-The supervisor should remain intentionally conservative, deterministic, and minimal in scope.
+If introduced, the supervisor should remain intentionally conservative, deterministic, and minimal in scope.
 
 The supervisor is not:
 - an AI runtime
-- a plugin marketplace
+- an add-on marketplace
 - a general-purpose script execution engine
 - a fast-moving feature layer
 
 Its primary responsibility is maintaining operational safety and recoverability of the local system.
 
-#### Agent / Plugin Layer
+#### Agent / Add-on Layer
 The higher-level application layer responsible for:
 - Home Assistant integration
 - topology discovery
@@ -480,11 +520,26 @@ The higher-level application layer responsible for:
 
 This layer is intentionally replaceable and allowed to evolve more rapidly than the supervisor.
 
-If the agent/plugin fails, the supervisor must still remain operational and capable of:
+If introduced, the supervisor must remain operational even when the agent/add-on layer fails and should be capable of:
 - rollback
 - recovery
 - diagnostics
 - reconnection to cloud services
+
+### Rollback Authority
+
+Rollback is an essential platform capability, not a support-only escape hatch.
+
+V0 rollback policy:
+
+- User/integrator-approved rollback is allowed for HomeSignal add-on releases when the rollback target is still supported.
+- Automatic rollback is allowed only for HomeSignal-controlled add-on update attempts that fail bounded local health checks, fail startup, fail to reconnect/authenticate to HomeSignal within the update window, or report a known bad update result.
+- Automatic rollback must preserve local HomeSignal identity, private keys, claim state, and local configuration.
+- Automatic rollback must report the attempted version, rollback version, reason, and terminal result when connectivity returns.
+- HomeSignal must not automatically roll back broader Home Assistant, Supervisor, OS, database, or unrelated host state unless a later local supervisor spec explicitly owns that surface.
+- Support may advise or trigger a rollback only through the same authorization and audit path available to the appropriate customer/integrator role; support-only hidden rollback authority is not a v0 product model.
+
+Rollback should be visible in product UI history because integrators need confidence that updates are recoverable and explainable.
 
 ### Desired State Model
 
@@ -495,11 +550,15 @@ The cloud declares intent:
 ```json
 {
   "site_id": "site_123",
-  "component": "ha_plugin",
+  "component": "ha_addon",
   "target_version": "1.8.3",
   "release_channel": "stable",
   "artifact_digest": "sha256:...",
   "rollout_id": "rollout_456"
 }
+```
 
-
+That full intent record is HomeSignal product state. The shadow projection is
+smaller: desired version, channel, rollout/reference identifiers, and bounded
+status/reason fields. Release artifacts, download URLs, signed URLs, and large
+release metadata stay out of the shadow.
