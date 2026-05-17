@@ -68,6 +68,36 @@ func (r *FakeDeviceRegistryRepository) RecordCredential(_ context.Context, recor
 	return nil
 }
 
+type FakeAuthRepository struct {
+	mu             sync.Mutex
+	UsersBySubject map[string]UserSubject
+	Permissions    map[UserID][]string
+}
+
+func NewFakeAuthRepository() *FakeAuthRepository {
+	return &FakeAuthRepository{
+		UsersBySubject: map[string]UserSubject{},
+		Permissions:    map[UserID][]string{},
+	}
+}
+
+func (r *FakeAuthRepository) GetUserByCognitoSub(_ context.Context, cognitoSub string) (UserSubject, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	user, ok := r.UsersBySubject[cognitoSub]
+	if !ok {
+		return UserSubject{}, fmt.Errorf("user subject not found")
+	}
+	return user, nil
+}
+
+func (r *FakeAuthRepository) ListPermissionKeys(_ context.Context, userID UserID, _ AccountID, _ SiteID) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	permissions := append([]string(nil), r.Permissions[userID]...)
+	return permissions, nil
+}
+
 type FakeTelemetryRepository struct {
 	mu           sync.Mutex
 	LatestStates map[DeviceID]LatestTelemetryState

@@ -58,6 +58,32 @@ func TestFakeTelemetryRepositoryStoresLatestAndSparseEvent(t *testing.T) {
 	}
 }
 
+func TestFakeAuthRepositoryMapsCognitoSubject(t *testing.T) {
+	repo := NewFakeAuthRepository()
+	repo.UsersBySubject["cognito-sub"] = UserSubject{
+		ID:         "user_123",
+		CognitoSub: "cognito-sub",
+		Email:      "person@example.com",
+		Status:     "active",
+	}
+	repo.Permissions["user_123"] = []string{"site:view"}
+
+	user, err := repo.GetUserByCognitoSub(context.Background(), "cognito-sub")
+	if err != nil {
+		t.Fatalf("GetUserByCognitoSub returned error: %v", err)
+	}
+	if user.ID != "user_123" {
+		t.Fatalf("user ID = %q", user.ID)
+	}
+	permissions, err := repo.ListPermissionKeys(context.Background(), user.ID, "", "")
+	if err != nil {
+		t.Fatalf("ListPermissionKeys returned error: %v", err)
+	}
+	if len(permissions) != 1 || permissions[0] != "site:view" {
+		t.Fatalf("permissions = %#v", permissions)
+	}
+}
+
 func TestFakeAuditRepositoryRecordsEvent(t *testing.T) {
 	repo := &FakeAuditRepository{}
 	err := repo.RecordAuditEvent(context.Background(), AuditEvent{

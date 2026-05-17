@@ -506,6 +506,11 @@ Acceptance:
 
 ### M2.2 AuthN Adapter
 
+Status: implemented as an interface/fake seam. `backend/internal/platform/authn`
+parses bearer credentials, verifies through an adapter interface, and maps
+Cognito subjects to local `users` through `AuthRepository`. Live Cognito JWKS
+configuration remains an environment/provider wiring step.
+
 Scope:
 
 - Cognito JWT verifier interface.
