@@ -285,6 +285,12 @@ Read first:
 
 ### M1.1 Database Connection And Repository Pattern
 
+Status: implemented as a first platform seam. `backend/internal/platform/database`
+owns Postgres connection config and transaction helpers.
+`backend/internal/domain/ports` owns repository interfaces and fakes for the
+first logical service boundaries. SQL adapters remain the next step once Neon is
+available or a disposable Postgres harness is added.
+
 Scope:
 
 - Add DB connection package.

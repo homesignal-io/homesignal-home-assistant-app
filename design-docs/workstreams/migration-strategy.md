@@ -115,6 +115,9 @@ provider consolidation, or operational simplicity outweigh Neon economics.
 - The initial v0 schema covers account/site/device identity, device
   credentials, presence, lifecycle events, latest telemetry state, sparse
   telemetry history, and ingest failures.
+- Application code should use `backend/internal/platform/database` for shared
+  Postgres connection/transaction behavior and repository interfaces under
+  `backend/internal/domain/ports`; route handlers should not grow direct SQL.
 
 ## Required Local Plan Checks
 

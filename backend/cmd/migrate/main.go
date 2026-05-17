@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
-
+	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/database"
 	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/migration"
 )
 
@@ -23,10 +20,6 @@ func main() {
 	)
 	flag.Parse()
 
-	if *databaseURL == "" {
-		*databaseURL = firstNonEmpty(os.Getenv("HOMESIGNAL_DATABASE_URL"), os.Getenv("DATABASE_URL"))
-	}
-
 	migrations, err := migration.LoadDir(*dir)
 	if err != nil {
 		exitf(1, "load migrations: %v", err)
@@ -37,19 +30,22 @@ func main() {
 		printFilesystemPlan(migrations)
 	case "status", "up":
 		if *databaseURL == "" {
+			cfg := database.LoadConfigFromEnv()
+			*databaseURL = cfg.URL
+		}
+		if *databaseURL == "" {
 			exitf(2, "missing database URL; set HOMESIGNAL_DATABASE_URL, DATABASE_URL, or -database-url")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 		defer cancel()
 
-		db, err := sql.Open("pgx", *databaseURL)
+		cfg := database.LoadConfigFromEnv()
+		cfg.URL = *databaseURL
+		db, err := database.Open(ctx, cfg)
 		if err != nil {
-			exitf(1, "open database: %v", err)
+			exitf(1, "%v", err)
 		}
 		defer db.Close()
-		if err := db.PingContext(ctx); err != nil {
-			exitf(1, "ping database: %v", err)
-		}
 
 		runner := migration.Runner{DB: db, Migrations: migrations}
 		if *mode == "status" {
@@ -102,15 +98,6 @@ func shortChecksum(checksum string) string {
 		return checksum
 	}
 	return checksum[:12]
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func exitf(code int, format string, args ...interface{}) {
