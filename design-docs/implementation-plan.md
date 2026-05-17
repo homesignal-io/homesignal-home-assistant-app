@@ -309,6 +309,11 @@ Acceptance:
 
 ### M1.2 Identity/Auth Tables
 
+Status: base schema implemented in
+`backend/migrations/000002_core_domain_schema.sql`. Seeded system roles and
+role permissions are data-backed. Membership invitation and service-account
+tables remain owner-specific follow-up when their API slices start.
+
 Scope:
 
 - `users`
@@ -330,6 +335,11 @@ Acceptance:
   route handlers.
 
 ### M1.3 Account/Site Tables
+
+Status: base schema implemented in
+`backend/migrations/000002_core_domain_schema.sql`: customer records, site
+relationships, buildings, zones, and generic resources exist alongside the
+earlier account/site tables.
 
 Scope:
 
@@ -353,6 +363,11 @@ Acceptance:
 
 ### M1.4 Device Registry And Enrollment Tables
 
+Status: base schema implemented in
+`backend/migrations/000002_core_domain_schema.sql`: claim invites,
+verifications, invite email deliveries, device claim fields, credential AWS
+metadata, and active-session uniqueness constraints exist.
+
 Scope:
 
 - `devices`
@@ -375,6 +390,10 @@ Acceptance:
 
 ### M1.5 Audit Table
 
+Status: base schema implemented in
+`backend/migrations/000002_core_domain_schema.sql`. Domain insert/query tests
+belong with the first service that emits audit events.
+
 Scope:
 
 - `audit_events`
@@ -391,6 +410,10 @@ Acceptance:
 
 ### M1.6 Command Tables
 
+Status: base schema implemented in
+`backend/migrations/000002_core_domain_schema.sql`, with command, progress, and
+terminal result tables separated.
+
 Scope:
 
 - `commands`
@@ -406,6 +429,10 @@ Acceptance:
 - ACK and terminal result can be stored separately.
 
 ### M1.7 Runtime State Tables
+
+Status: base schema implemented across
+`backend/migrations/000001_initial_v0_platform.sql` and
+`backend/migrations/000002_core_domain_schema.sql`.
 
 Scope:
 

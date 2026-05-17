@@ -115,6 +115,10 @@ provider consolidation, or operational simplicity outweigh Neon economics.
 - The initial v0 schema covers account/site/device identity, device
   credentials, presence, lifecycle events, latest telemetry state, sparse
   telemetry history, and ingest failures.
+- The second v0 schema migration expands the same additive base into Auth/RBAC,
+  Account/Site hierarchy, claim invites/verifications, audit, commands, desired
+  state, and edge-state projection. It remains app-owned PostgreSQL schema, not
+  Neon Auth or provider-specific behavior.
 - Application code should use `backend/internal/platform/database` for shared
   Postgres connection/transaction behavior and repository interfaces under
   `backend/internal/domain/ports`; route handlers should not grow direct SQL.
