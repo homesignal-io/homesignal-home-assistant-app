@@ -528,6 +528,11 @@ Acceptance:
 
 ### M2.3 Authorization Service
 
+Status: first evaluator seam implemented in
+`backend/internal/domain/authorization`: validates permission action shape and
+checks additive permission keys through `AuthRepository`. Relationship-aware
+permission expansion remains the SQL/service adapter follow-up.
+
 Scope:
 
 - `AuthorizationService.can(subject, action, resource, context)`.
