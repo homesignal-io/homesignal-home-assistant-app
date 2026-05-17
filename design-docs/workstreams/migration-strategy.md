@@ -100,6 +100,22 @@ Rules:
 RDS should be revisited when private networking, fixed production posture,
 provider consolidation, or operational simplicity outweigh Neon economics.
 
+## Current V0 Migration Surface
+
+- Source-controlled SQL migrations live in `backend/migrations`.
+- The local runner is `backend/cmd/migrate`; the shared command surface is
+  `scripts/migrate.sh staging [plan|status|status-if-configured|up]`.
+- `scripts/deploy.sh staging` always runs migration `plan` so malformed SQL or
+  duplicate versions fail before deploy.
+- Deploy does not apply migrations by default. Set `HOMESIGNAL_RUN_MIGRATIONS=1`
+  after the Neon PostgreSQL URL is stored in AWS Secrets Manager.
+- The staging database URL secret is
+  `/homesignal/staging/platform/database_url`. The secret value is managed
+  outside Terraform so the database password is not stored in IaC state.
+- The initial v0 schema covers account/site/device identity, device
+  credentials, presence, lifecycle events, latest telemetry state, sparse
+  telemetry history, and ingest failures.
+
 ## Required Local Plan Checks
 
 Every affected service plan should state:

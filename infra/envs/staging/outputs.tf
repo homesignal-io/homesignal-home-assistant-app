@@ -57,3 +57,23 @@ output "iot_lifecycle_log_group" {
   description = "CloudWatch log group for AWS IoT lifecycle events."
   value       = aws_cloudwatch_log_group.iot_lifecycle.name
 }
+
+output "database_url_secret_name" {
+  description = "Secrets Manager name for the staging PostgreSQL connection URL."
+  value       = aws_secretsmanager_secret.database_url.name
+}
+
+output "database_url_secret_arn" {
+  description = "Secrets Manager ARN for the staging PostgreSQL connection URL."
+  value       = aws_secretsmanager_secret.database_url.arn
+}
+
+output "database_provider_parameter_name" {
+  description = "SSM parameter that records the staging PostgreSQL provider."
+  value       = aws_ssm_parameter.database_provider.name
+}
+
+output "database_region_parameter_name" {
+  description = "SSM parameter that records the expected staging PostgreSQL region."
+  value       = aws_ssm_parameter.database_region.name
+}

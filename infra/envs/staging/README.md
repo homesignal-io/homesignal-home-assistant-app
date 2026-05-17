@@ -11,6 +11,8 @@ first AWS IoT Core routing resources:
   smoke tests until Agent HTTPS mTLS is wired.
 - AWS IoT device policy, Thing type, lifecycle topic rule, and lifecycle log
   group.
+- Secrets Manager metadata for the staging PostgreSQL URL and SSM config
+  parameters recording Neon as the expected provider in `us-east-1`.
 - CloudWatch log groups with short staging retention.
 - Runtime IAM roles scoped to Lambda logging, ECS execution, and IoT lifecycle
   logging.
@@ -40,6 +42,27 @@ Set these environment variables before deploying when applicable:
 - `HOMESIGNAL_OWNER_TAG`: owner tag value, default `platform`.
 - `HOMESIGNAL_TELEMETRY_IMAGE_TAG`: optional telemetry-ingest image tag,
   defaults to the deploy version.
+- `HOMESIGNAL_RUN_MIGRATIONS=1`: apply database migrations during deploy after
+  the Neon PostgreSQL URL is configured.
+
+## Database
+
+The deploy creates the AWS secret metadata only; it does not store a database
+password in Terraform state. After creating the HomeSignal Neon database in
+`us-east-1`, store the plain PostgreSQL connection URL in:
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id /homesignal/staging/platform/database_url \
+  --secret-string "$HOMESIGNAL_DATABASE_URL"
+```
+
+Then run:
+
+```bash
+scripts/migrate.sh staging up
+scripts/smoke.sh staging
+```
 
 ## State
 

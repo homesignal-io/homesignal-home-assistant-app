@@ -229,6 +229,10 @@ Acceptance:
 
 ### M0.3 Migration Tooling
 
+Status: implemented for the first staging database slice. `backend/migrations`
+contains Goose-style SQL, `backend/cmd/migrate` runs plan/status/up, and
+`scripts/migrate.sh` is the shared command surface.
+
 Scope:
 
 - Add Goose-style SQL migration runner under `backend/migrations`.

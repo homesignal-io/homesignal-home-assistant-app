@@ -171,4 +171,6 @@ aws iot get-topic-rule \
   --region "$REGION" \
   --rule-name "$IOT_RULE_NAME" >/dev/null
 
+"$ROOT/scripts/migrate.sh" staging status-if-configured
+
 echo "Smoke checks passed"

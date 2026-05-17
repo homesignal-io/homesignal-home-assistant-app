@@ -15,7 +15,8 @@ operator to perform routine implementation work.
 - No launch `dev` cloud environment
 - AWS region: `us-east-1`
 - Durable AWS resource prefix: `homesignal-{environment}-...`
-- First deploy scope: low-cost control-plane skeleton only
+- First deploy scope: low-cost control-plane skeleton, telemetry-ingest
+  skeleton, IoT routing skeleton, and database migration plumbing
 
 ## Operator Tasks Before First Staging Deploy
 
@@ -41,7 +42,7 @@ account can own a budget.
 
 | Task | Needed before | Default/recommendation | Codex action once supplied |
 | --- | --- | --- | --- |
-| HomeSignal Neon project/database | Database and migration slice | Create a HomeSignal-owned Neon project/database in `us-east-1`; do not reuse the voice-extraction database | Store connection material through HomeSignal secret paths and keep app code provider-neutral |
+| HomeSignal Neon project/database | Applying database migrations and wiring runtime persistence | Create a HomeSignal-owned Neon project/database in `us-east-1`; do not reuse the voice-extraction database | Store the plain PostgreSQL URL in `/homesignal/staging/platform/database_url`, run `scripts/migrate.sh staging up`, and keep app code provider-neutral |
 | Hosted zone and domain names | Custom DNS/API domains | Skip custom DNS for first deploy; use generated AWS endpoint | Add Route 53/ACM/API Gateway domain wiring when ready |
 | Resend account and sender verification | Notification/email slice | Use Resend with sandbox/test recipient policy first | Wire `RESEND_API_KEY`, sender config, outbox processing, and test send smoke |
 | Production AWS account | Production deploy preparation | Separate production account before customer launch | Scaffold/verify production IaC without applying until approved |

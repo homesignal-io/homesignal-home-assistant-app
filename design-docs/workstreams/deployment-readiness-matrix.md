@@ -67,10 +67,14 @@ points:
   `scripts/smoke.sh`, `scripts/logs.sh`, `scripts/migrate.sh`,
   `scripts/rotate-db-credentials.sh`, and
   `scripts/cleanup-staging-fixtures.sh`
+- Database migration surface: `backend/migrations`, `backend/cmd/migrate`, and
+  AWS secret metadata for `/homesignal/staging/platform/database_url`
 
 The first cloud deploy remains gated by local toolchain and operator/provider
 inputs: Go, AWS CLI, OpenTofu or Terraform, a named AWS deploy principal, and a
-confirmed staging budget guardrail or alert email.
+confirmed staging budget guardrail or alert email. Applying database migrations
+also requires a HomeSignal Neon database URL stored in the staging database
+secret or exported as `HOMESIGNAL_DATABASE_URL`.
 
 ## Environment Defaults
 

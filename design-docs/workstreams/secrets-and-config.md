@@ -57,6 +57,17 @@ Cloud services:
 - prefer AWS IAM/service identity over manually rotated static service
   credentials
 
+Staging database:
+
+- use `/homesignal/staging/platform/database_url` for the HomeSignal-owned Neon
+  PostgreSQL URL used by migration and runtime wiring
+- keep the secret value out of Terraform state; Terraform owns only the AWS
+  Secrets Manager metadata
+- store non-secret provider hints under
+  `/homesignal/staging/platform/config/database_*`
+- treat the first Neon account/project/database creation as an operator
+  prerequisite; after creation, migrations can run through `scripts/migrate.sh`
+
 Home Assistant add-on:
 
 - store metadata in `/config/device.json`

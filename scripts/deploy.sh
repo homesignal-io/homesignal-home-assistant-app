@@ -11,6 +11,7 @@ CREATE_BUDGET="${HOMESIGNAL_CREATE_STAGING_BUDGET:-0}"
 MONTHLY_BUDGET_AMOUNT="${HOMESIGNAL_STAGING_BUDGET_AMOUNT:-25}"
 OWNER_TAG="${HOMESIGNAL_OWNER_TAG:-platform}"
 TELEMETRY_IMAGE_TAG="${HOMESIGNAL_TELEMETRY_IMAGE_TAG:-}"
+RUN_MIGRATIONS="${HOMESIGNAL_RUN_MIGRATIONS:-0}"
 
 fail() {
   echo "$1" >&2
@@ -90,6 +91,7 @@ if [[ "$CREATE_BUDGET" != "1" && -n "$BUDGET_ALERT_EMAIL" ]]; then
 fi
 
 HOMESIGNAL_VERSION="$VERSION" "$ROOT/scripts/build.sh"
+"$ROOT/scripts/migrate.sh" staging plan
 
 (
   cd "$ROOT/infra/envs/staging"
@@ -130,6 +132,12 @@ HOMESIGNAL_VERSION="$VERSION" "$ROOT/scripts/build.sh"
     -var="monthly_budget_amount=$MONTHLY_BUDGET_AMOUNT" \
     -var="owner_tag=$OWNER_TAG" \
     -var="telemetry_ingest_image=$TELEMETRY_IMAGE"
+
+  if [[ "$RUN_MIGRATIONS" == "1" ]]; then
+    "$ROOT/scripts/migrate.sh" staging up
+  else
+    echo "Skipping database migration apply. Set HOMESIGNAL_RUN_MIGRATIONS=1 after the Neon database URL is configured."
+  fi
 
   echo "Deploy complete"
   echo "  staging_base_url: $("$TF_BIN" output -raw staging_base_url)"
