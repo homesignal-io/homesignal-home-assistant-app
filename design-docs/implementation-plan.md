@@ -962,15 +962,20 @@ Scope:
 - Sparse material history.
 - Failure/quarantine rows.
 - Material hash and message hash.
+- Runtime-local or shared hot dedupe/coalescing path that prevents unchanged
+  telemetry from becoming one DB write per report.
 
 Tests:
 
 - Duplicate message idempotency.
 - Material change writes; unchanged sample suppresses.
+- Received-message versus persisted-write metric proves unchanged suppression.
 
 Acceptance:
 
 - Postgres is not an unbounded raw time-series store.
+- Telemetry Ingest is not implemented as per-message Lambda direct-to-Postgres;
+  the cloud runtime preserves hot dedupe, coalescing, and batched writes.
 
 ### M6.5 Authority Resolution
 
@@ -1728,7 +1733,8 @@ Tests:
 
 Acceptance:
 
-- V0 device history/status can be populated.
+- V0 device history/status can be populated without requiring every unchanged
+  telemetry snapshot to be persisted.
 
 ### M13.5 Routine Event And Agent Alarm Publisher
 
@@ -2038,7 +2044,8 @@ email, or CI/CD slices are ready.
 23. Add Agent telemetry/events route adapter to fake ingest receiver.
 24. Create `telemetry-ingest/` skeleton and pipeline interfaces.
 25. Add telemetry schema fixtures and schema catalog MVP.
-26. Add telemetry persistence/dedupe with latest-state tables.
+26. Add telemetry persistence/dedupe with latest-state tables and
+    received-message versus persisted-write suppression metrics.
 27. Add device authority resolution and identity-drift failures in ingest.
 28. Add IoT lifecycle presence ingestion.
 29. Add alert candidate sink and Alerting candidate intake.

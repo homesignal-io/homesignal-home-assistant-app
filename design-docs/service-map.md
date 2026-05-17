@@ -320,6 +320,8 @@ The add-on receives resolved effective publish policy, not plan/tier labels. Con
 
 The efficient ingestion contract is documented in `telemetry-ingest-architecture.md`: the mTLS Agent HTTPS API routes messages directly into an ingest receiver in v0 (no queue). A queue is considered later if reliability/backpressure needs justify it. Telemetry Ingest validates device authority, suppresses unchanged writes with material hashes, persists latest state for API reads, records meaningful state changes, and sends alert candidates through a logical sink.
 
+Telemetry Ingest must not be implemented as a naive every-message-to-Postgres writer. Its default deployable shape is a small long-lived runtime, such as Fargate, so it can keep hot dedupe state, coalesce noisy samples, and batch persistence. Lambda remains acceptable for the current control-plane deploy proof and for future ingest adapters only if a shared dedupe/batching layer preserves the same write-suppression contract.
+
 ### Cloud-To-Device Messages
 
 ```mermaid

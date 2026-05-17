@@ -233,9 +233,11 @@ environment defaults, runtime target defaults, CI/CD stages and gates,
 service-level secret/config classes, smoke checks, test harness gates,
 CloudWatch alarm coverage, launch runbooks, and remaining external inputs.
 Follow-on reconciliation aligned service/build docs to the matrix: runtime
-defaults no longer imply ECS/Fargate, queues, or DLQs as v0 requirements;
+defaults no longer imply ECS/Fargate, queues, or DLQs as blanket v0 requirements;
 product alerting/email is consistently a v0 surface; and missing command ACK
-behavior is routed to `command-lifecycle.md`.
+behavior is routed to `command-lifecycle.md`. A later Telemetry Ingest decision
+narrows this for the ingest boundary because hot dedupe and batched persistence
+are runtime requirements.
 
 The matrix remains architecture-only: it defines what future implementation
 must satisfy without implying that CI/CD, IaC, staging, or production resources
@@ -1146,4 +1148,36 @@ Touched docs:
 - `design-docs/service-map.md`
 - `design-docs/update-architecture.md`
 - `design-docs/ui-data-wiring-reconciliation.md`
+- `design-docs/implementation-plan.md`
+
+## 2026-05-16 - Telemetry Ingest Write Suppression Runtime
+
+Status: Resolved
+
+Outcome:
+V0 Telemetry Ingest is not a per-message database writer. It must use schema-aware
+material hashes, hot dedupe/coalescing state, publish-policy budgets, and batched
+persistence so unchanged telemetry does not become one Postgres write per
+accepted report. Postgres stores current product state, sparse material history,
+support/debug references, failure/quarantine records, and cold-archive pointers,
+not an unbounded raw telemetry stream.
+
+The default cloud runtime for Telemetry Ingest is a small long-lived service,
+such as ECS/Fargate, because the runtime needs effective hot state and batched
+DB writes. Lambda remains acceptable for the first control-plane deployment
+proof and for future ingest adapters only if a shared dedupe/batching layer
+preserves the same write-suppression behavior. Per-message Lambda
+direct-to-Postgres for Telemetry Ingest requires an explicit architecture
+exception before implementation.
+
+Canonical locations:
+- `design-docs/telemetry-ingest-architecture.md`
+- `design-docs/workstreams/deployment-readiness-matrix.md`
+- `design-docs/service-map.md`
+- `design-docs/implementation-plan.md`
+
+Touched docs:
+- `design-docs/telemetry-ingest-architecture.md`
+- `design-docs/workstreams/deployment-readiness-matrix.md`
+- `design-docs/service-map.md`
 - `design-docs/implementation-plan.md`

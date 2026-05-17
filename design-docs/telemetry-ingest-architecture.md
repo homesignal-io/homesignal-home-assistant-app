@@ -14,6 +14,8 @@ It is intentionally not a high-frequency time-series plan. The first service bui
 - **AWS IoT Core remains the realtime control/session layer.** It carries commands, notifications, compact edge state/shadows, and lifecycle presence, but routine v0 telemetry/events do not need MQTT/Basic Ingest.
 - **Telemetry Ingest interprets raw IoT facts.** It validates, orders, deduplicates, and decides whether HomeSignal product state changed.
 - **Postgres is product truth plus compact projections.** The main API and web app read from DB-backed read models, not from IoT Core, ingest memory, queues, or raw shadow documents.
+- **Do not write every telemetry report to Postgres.** Ingest must suppress unchanged/noisy samples before persistence using material hashes, hot dedupe state, publish-policy budgets, batching, and sparse-history rules.
+- **Runtime shape must preserve write suppression.** The telemetry runtime needs enough shared or long-lived state to keep dedupe/coalescing effective. A per-message stateless function that compares/writes every report directly against Postgres is not the target architecture.
 - **Edge state is separate.** Compact desired/reported edge policy state belongs behind the Edge State Adapter and AWS IoT named shadows, not the telemetry/event ingest path.
 - **Alerting receives candidates, not authority.** Ingest can wake alerting, but alerting verifies current DB state before creating or resolving alerts.
 - **Keep phase 1 thin but well-seamed.** Use interfaces for receiver, schema catalog, dedupe store, persistence, and alert sink so later infrastructure can plug in.
@@ -92,6 +94,8 @@ flowchart LR
 ```
 
 The receiver can be local/fake for code-first development. The v0 cloud receiver is an authenticated Agent HTTPS route. A queue is intentionally not used in v0.
+
+The v0 cloud runtime should default to a small long-lived service, such as Fargate, so one process can keep hot dedupe state, coalesce unchanged samples, and batch DB writes. Lambda may still be used for unrelated control-plane endpoints or for a future ingest adapter, but only if the ingest design preserves the same write-suppression contract with shared cache, batching, or another durable dedupe layer. A direct "one accepted telemetry message -> one Postgres write" implementation is out of bounds.
 
 ## Ingress Sources
 
@@ -514,17 +518,20 @@ LifecycleEvaluator
   handles connected/disconnected/connect_failed ordering and debounce
 
 StateEvaluator
-  compares material/sidecar hashes and decides whether persisted state changed
+  compares material/sidecar hashes and decides whether persisted state changed;
+  this is the first write-protection stage
 
 IngestAnnotationEvaluator
   checks publish policy, debug sessions, watch rules, and failure classification
   attaches internal capture/retention/logging annotations
 
 DedupeStore
-  remembers hot dedupe entries and pending lifecycle candidates
+  remembers hot dedupe entries and pending lifecycle candidates so unchanged
+  samples can be dropped without round-tripping every report through Postgres
 
 PersistenceWriter
-  batches writes to Postgres
+  batches writes to Postgres; it writes latest state, sparse material history,
+  and failure/support records, not every accepted unchanged sample
 
 AlertCandidateSink
   sends best-effort alert candidates after DB writes
@@ -1065,6 +1072,8 @@ streams. Larger debug material uses the Artifact Upload Broker and S3.
 
 The inbound receiver is the intake boundary. In v0 there is no queue in this path; keep intake bounded and rely on HTTP status codes, rate limits, operational alarms, and bounded device retry behavior.
 
+Runtime selection is part of backpressure design. If the chosen substrate cannot preserve `dedupe_cache_ttl`, `input_batch_size`, and `db_write_batch_size` semantics, use a long-lived worker or add a shared dedupe/batching layer before accepting the design. Falling back to DB-backed comparison is a degraded mode for short incidents, not the steady-state cost model.
+
 Initial controls:
 
 | Control | Default |
@@ -1139,6 +1148,8 @@ received messages vs persisted writes
 
 This shows whether dedupe is protecting storage.
 
+For normal hourly health snapshots, persisted writes should be materially lower than received messages after the first unchanged steady-state period. If this ratio approaches 1:1 for unchanged telemetry, the ingest implementation is violating the architecture even if the API still works.
+
 Future Platform Health / Monitoring consumes summarized ingest counters and findings for slower cross-service correlation, including runaway IoT messaging patterns. Telemetry Ingest remains responsible for hot-path validation, drop/count, and quarantine; Platform Health / Monitoring should not sit in the hot path.
 
 ## Future Extension Points
@@ -1171,6 +1182,9 @@ Keep these as seams, not MVP implementation:
 - Identity drift is rejected/quarantined and does not update product state.
 - Ingest writes `device_presence` and `device_latest_state` for API reads.
 - Ingest suppresses unchanged telemetry writes using `material_hash`.
+- Ingest does not persist every accepted unchanged telemetry report.
+- Ingest exposes received-message versus persisted-write metrics before staging ingest is considered ready.
+- Ingest runtime selection explains where hot dedupe/coalescing state lives and how it survives concurrency, restarts, and cold starts.
 - Ingest refreshes latest state periodically so the UI does not look fresh forever.
 - Ingest updates `last_accepted_telemetry_at` for accepted telemetry.
 - Ingest can emit `connected_but_telemetry_stale` after a conservative threshold.

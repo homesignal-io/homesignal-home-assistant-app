@@ -40,7 +40,7 @@ These are architecture-readiness grades, not implementation-status grades.
 | --- | --- | --- |
 | Environment model | A | `staging` and `production` are the only launch cloud environments, with production-shaped staging. |
 | Deployment topology | A- | V0 uses one control-plane monolith plus separately deployable Telemetry Ingest; exact compute is defaulted below. |
-| Runtime compute target | A- | API Gateway plus Lambda is selected for the first control-plane deploy, with explicit Fargate escape criteria. |
+| Runtime compute target | A | API Gateway plus Lambda is selected for the first control-plane deploy; Telemetry Ingest defaults to a small long-lived/Fargate-style runtime so hot dedupe, coalescing, and DB write batching are preserved. |
 | CI/CD policy | A- | Script-first, CodeBuild-preferred, thin GitHub Actions, staging automation, production approval. |
 | IaC policy | A- | OpenTofu/Terraform-style IaC with env directories and no undocumented production resources. |
 | Secrets/config | A | Standard paths, env vars, injection posture, rotation defaults, and service-level inventory are defined. |
@@ -167,9 +167,12 @@ Tagging:
 
 Default v0 compute:
 
-- Control-plane monolith: Go service deployed behind API Gateway.
+- Control-plane monolith: Go service deployed behind API Gateway. The first deploy
+  may use Lambda while the control-plane surface is still skeletal.
 - Telemetry Ingest: separately deployable Go service behind the Agent HTTPS
-  receiver and AWS IoT lifecycle integration.
+  receiver and AWS IoT lifecycle integration. Its default cloud runtime is a
+  small long-lived service, such as ECS/Fargate, because hot dedupe,
+  coalescing, and batched Postgres writes are architecture requirements.
 - Async/background work: start as process-local or scheduled workers only when
   durability is not required; use database-backed outbox rows for notification
   delivery before introducing a queue.
@@ -178,9 +181,15 @@ Preferred AWS substrate for the first launch architecture:
 
 - Use API Gateway for public product/API routes and Agent HTTPS mTLS routes.
 - Use Lambda or another API Gateway-native integration for the first
-  control-plane and Telemetry Ingest deployables when request duration and
-  connection behavior fit.
-- Move a service to ECS/Fargate only when a concrete need appears, such as
+  control-plane deploy while it hosts only low-rate API/smoke behavior.
+- Use ECS/Fargate or an equivalent long-lived runtime for Telemetry Ingest unless
+  a later architecture decision adds a shared dedupe/batching layer that gives a
+  serverless adapter the same write-suppression behavior.
+- Do not implement Telemetry Ingest as per-message Lambda direct-to-Postgres.
+  A function adapter can receive requests only if it delegates to the ingest
+  runtime or to shared hot-state infrastructure that preserves `received
+  messages vs persisted writes` suppression.
+- Move control-plane work to ECS/Fargate when a concrete need appears, such as
   long-running workers, persistent connections, heavy local dependencies, or
   Lambda/API Gateway limits.
 
@@ -225,7 +234,7 @@ These resources must be represented in IaC before production launch.
 | Resource | Purpose | Environment |
 | --- | --- | --- |
 | Control-plane runtime | API Facade and logical domain services | staging, production |
-| Telemetry Ingest runtime | Agent telemetry/events and IoT lifecycle processing | staging, production |
+| Telemetry Ingest ECS/Fargate service, task definition, and task role | Agent telemetry/events, hot dedupe/coalescing, IoT lifecycle processing, and batched persistence | staging, production |
 | Notification/outbox worker | Transactional email attempts | staging, production |
 | Optional scheduled cleanup worker | Expired sessions, debug TTL, artifact cleanup | staging, production |
 
@@ -316,6 +325,8 @@ Config:
 - accepted runtime envelope versions
 - schema catalog version
 - ingest size limits
+- hot dedupe/cache TTL
+- input and DB write batch sizes
 - quarantine/drop policy defaults
 - object archive bucket/prefix when cold archive is enabled
 
