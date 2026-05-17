@@ -29,7 +29,7 @@ func TestHandleInvocationAdaptsAPIGatewayV2Event(t *testing.T) {
 		}
 	}`)
 
-	response, err := handleInvocation(app, payload)
+	response, summary, err := handleInvocation(app, payload)
 	if err != nil {
 		t.Fatalf("handleInvocation returned error: %v", err)
 	}
@@ -43,5 +43,11 @@ func TestHandleInvocationAdaptsAPIGatewayV2Event(t *testing.T) {
 	}
 	if body["status"] != "ok" {
 		t.Fatalf("status = %v, want ok", body["status"])
+	}
+	if summary.Method != "GET" {
+		t.Fatalf("Method = %q, want GET", summary.Method)
+	}
+	if summary.Path != "/healthz" {
+		t.Fatalf("Path = %q, want /healthz", summary.Path)
 	}
 }

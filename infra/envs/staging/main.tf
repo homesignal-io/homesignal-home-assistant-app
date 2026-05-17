@@ -64,7 +64,7 @@ resource "aws_lambda_function" "control_plane" {
       HOMESIGNAL_ENV          = local.environment
       HOMESIGNAL_AWS_REGION   = var.aws_region
       HOMESIGNAL_SERVICE_NAME = "control-plane"
-      HOMESIGNAL_VERSION      = var.version
+      HOMESIGNAL_VERSION      = var.artifact_version
     }
   }
 
@@ -134,7 +134,7 @@ resource "aws_lambda_permission" "allow_public_api" {
 }
 
 resource "aws_budgets_budget" "staging_monthly" {
-  count = var.budget_alert_email == "" ? 0 : 1
+  count = var.create_budget && var.budget_alert_email != "" ? 1 : 0
 
   name         = "${local.resource_prefix}-monthly-cost"
   budget_type  = "COST"

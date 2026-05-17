@@ -25,6 +25,7 @@ operator to perform routine implementation work.
 | Confirm account security baseline | Root MFA enabled, no root access keys, deploy work uses a named IAM Identity Center role, IAM role, or profile | Do not deploy from root credentials | Refuse root credentials when detectable and log the deploy principal used |
 | Confirm AWS region | Region only if rejecting `us-east-1` | Keep `us-east-1` to align with verified Neon region | Pass region explicitly through scripts and IaC |
 | Cost guardrail alert target | Operator email address or SNS topic | Start with email if SNS is not already established; set `HOMESIGNAL_BUDGET_ALERT_EMAIL` for the first deploy script | Create or verify AWS Budget/cost notification |
+| Member-account budget enablement | Payer/management account Budgets enabled for linked accounts, or a budget created from the payer account for staging | Prefer payer-account budget ownership for Organizations member accounts | Skip member-account budget creation in staging IaC until payer-account Budgets allow it; log the guardrail task |
 | Initial staging budget threshold | Monthly amount | `$25/month`, actual spend alerts at 80% and 100%, forecasted 100% when supported | Configure or document the budget guardrail |
 | Confirm budget notification | Email/SNS confirmation when AWS sends it | Confirm immediately so the guardrail is active | Re-check budget state after confirmation when possible |
 | Cost allocation tag overrides | Optional owner/cost-center tag values if the AWS account requires them | Use default HomeSignal tags if no account-specific cost center exists | Apply required tags through IaC/scripts |
@@ -32,7 +33,9 @@ operator to perform routine implementation work.
 Missing budget or alert-target setup does not block local code, scripts, or IaC
 preparation. It blocks the first cloud deploy unless
 `HOMESIGNAL_BUDGET_GUARDRAIL_CONFIRMED=1` records that the guardrail already
-exists.
+exists. When staging runs as an AWS Organizations member account, budget
+creation may need to happen from the payer/management account before the member
+account can own a budget.
 
 ## Later Operator Tasks
 

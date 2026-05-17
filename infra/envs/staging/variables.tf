@@ -10,9 +10,15 @@ variable "aws_region" {
 }
 
 variable "budget_alert_email" {
-  description = "Email recipient for staging budget alerts. Leave empty to skip the AWS Budget resource."
+  description = "Email recipient for staging budget alerts. Used only when create_budget is true."
   type        = string
   default     = ""
+}
+
+variable "create_budget" {
+  description = "Whether this workspace should create the AWS Budget. Keep false for Organizations member accounts unless payer-account budget creation is enabled."
+  type        = bool
+  default     = false
 }
 
 variable "lambda_package_path" {
@@ -38,7 +44,7 @@ variable "owner_tag" {
   default     = "platform"
 }
 
-variable "version" {
+variable "artifact_version" {
   description = "Version string exposed by the control-plane /version endpoint."
   type        = string
   default     = "dev"

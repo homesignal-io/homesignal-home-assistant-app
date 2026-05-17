@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/controlplane"
 )
@@ -25,6 +26,7 @@ type apiGatewayV2Event struct {
 	Body            string            `json:"body"`
 	IsBase64Encoded bool              `json:"isBase64Encoded"`
 	RequestContext  struct {
+		RequestID string `json:"requestId"`
 		HTTP struct {
 			Method string `json:"method"`
 			Path   string `json:"path"`
@@ -42,6 +44,14 @@ type apiGatewayV2Response struct {
 type invocationError struct {
 	ErrorMessage string `json:"errorMessage"`
 	ErrorType    string `json:"errorType"`
+}
+
+type requestSummary struct {
+	Method     string
+	Path       string
+	RequestID  string
+	StatusCode int
+	Duration   time.Duration
 }
 
 func Run(ctx context.Context, runtimeAPI string, handler Handler, logger *slog.Logger) error {
@@ -67,7 +77,7 @@ func Run(ctx context.Context, runtimeAPI string, handler Handler, logger *slog.L
 			return err
 		}
 
-		response, err := handleInvocation(handler, invocation)
+		response, summary, err := handleInvocation(handler, invocation)
 		if err != nil {
 			logger.Error("invocation failed", "error", err, "request_id", requestID)
 			if postErr := postInvocationError(ctx, client, endpoint, requestID, err); postErr != nil {
@@ -75,6 +85,17 @@ func Run(ctx context.Context, runtimeAPI string, handler Handler, logger *slog.L
 			}
 			continue
 		}
+		if summary.RequestID == "" {
+			summary.RequestID = requestID
+		}
+		logger.Info(
+			"request completed",
+			"method", summary.Method,
+			"path", summary.Path,
+			"status", summary.StatusCode,
+			"duration_ms", summary.Duration.Milliseconds(),
+			"request_id", summary.RequestID,
+		)
 
 		if err := postInvocationResponse(ctx, client, endpoint, requestID, response); err != nil {
 			return err
@@ -109,10 +130,10 @@ func nextInvocation(ctx context.Context, client *http.Client, endpoint string) (
 	return body, requestID, nil
 }
 
-func handleInvocation(handler Handler, payload []byte) (apiGatewayV2Response, error) {
+func handleInvocation(handler Handler, payload []byte) (apiGatewayV2Response, requestSummary, error) {
 	var event apiGatewayV2Event
 	if err := json.Unmarshal(payload, &event); err != nil {
-		return apiGatewayV2Response{}, fmt.Errorf("decode API Gateway event: %w", err)
+		return apiGatewayV2Response{}, requestSummary{}, fmt.Errorf("decode API Gateway event: %w", err)
 	}
 
 	method := event.RequestContext.HTTP.Method
@@ -131,17 +152,32 @@ func handleInvocation(handler Handler, payload []byte) (apiGatewayV2Response, er
 	if event.IsBase64Encoded {
 		decoded, err := base64.StdEncoding.DecodeString(event.Body)
 		if err != nil {
-			return apiGatewayV2Response{}, fmt.Errorf("decode base64 body: %w", err)
+			return apiGatewayV2Response{}, requestSummary{}, fmt.Errorf("decode base64 body: %w", err)
 		}
 		body = decoded
 	}
 
+	start := time.Now()
 	appResponse := handler.Serve(method, path, event.Headers, body)
+	headers := appResponse.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	if event.RequestContext.RequestID != "" && headers["X-Request-Id"] == "" {
+		headers["X-Request-Id"] = event.RequestContext.RequestID
+	}
+
 	return apiGatewayV2Response{
 		StatusCode:      appResponse.StatusCode,
-		Headers:         appResponse.Headers,
+		Headers:         headers,
 		Body:            string(appResponse.Body),
 		IsBase64Encoded: false,
+	}, requestSummary{
+		Method:     method,
+		Path:       path,
+		RequestID:  event.RequestContext.RequestID,
+		StatusCode: appResponse.StatusCode,
+		Duration:   time.Since(start),
 	}, nil
 }
 

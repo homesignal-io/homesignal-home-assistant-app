@@ -7,6 +7,7 @@ REGION="${HOMESIGNAL_AWS_REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}
 VERSION="${HOMESIGNAL_VERSION:-}"
 BUDGET_ALERT_EMAIL="${HOMESIGNAL_BUDGET_ALERT_EMAIL:-}"
 BUDGET_GUARDRAIL_CONFIRMED="${HOMESIGNAL_BUDGET_GUARDRAIL_CONFIRMED:-}"
+CREATE_BUDGET="${HOMESIGNAL_CREATE_STAGING_BUDGET:-0}"
 MONTHLY_BUDGET_AMOUNT="${HOMESIGNAL_STAGING_BUDGET_AMOUNT:-25}"
 OWNER_TAG="${HOMESIGNAL_OWNER_TAG:-platform}"
 
@@ -70,11 +71,19 @@ echo "  region:  $REGION"
 echo "  version: $VERSION"
 
 if [[ -z "$BUDGET_ALERT_EMAIL" && "$BUDGET_GUARDRAIL_CONFIRMED" != "1" ]]; then
-  fail "Missing staging budget guardrail. Set HOMESIGNAL_BUDGET_ALERT_EMAIL so Terraform can create it, or set HOMESIGNAL_BUDGET_GUARDRAIL_CONFIRMED=1 if it already exists." 2
+  fail "Missing staging budget guardrail input. Set HOMESIGNAL_BUDGET_ALERT_EMAIL for the payer-account budget task, or set HOMESIGNAL_BUDGET_GUARDRAIL_CONFIRMED=1 if it already exists." 2
 fi
 
 if [[ -z "$BUDGET_ALERT_EMAIL" && "$BUDGET_GUARDRAIL_CONFIRMED" == "1" ]]; then
   echo "Budget guardrail marked as already configured; Terraform will skip the AWS Budget resource."
+fi
+
+if [[ "$CREATE_BUDGET" == "1" && -z "$BUDGET_ALERT_EMAIL" ]]; then
+  fail "HOMESIGNAL_CREATE_STAGING_BUDGET=1 requires HOMESIGNAL_BUDGET_ALERT_EMAIL." 2
+fi
+
+if [[ "$CREATE_BUDGET" != "1" && -n "$BUDGET_ALERT_EMAIL" ]]; then
+  echo "Budget alert email captured. Skipping budget creation from the member account; create/enable the budget in the payer account or rerun with HOMESIGNAL_CREATE_STAGING_BUDGET=1 after payer-account Budgets are enabled."
 fi
 
 HOMESIGNAL_VERSION="$VERSION" "$ROOT/scripts/build.sh"
@@ -86,8 +95,9 @@ HOMESIGNAL_VERSION="$VERSION" "$ROOT/scripts/build.sh"
     -auto-approve \
     -var="aws_region=$REGION" \
     -var="lambda_package_path=$ROOT/backend/dist/control-plane/bootstrap.zip" \
-    -var="version=$VERSION" \
+    -var="artifact_version=$VERSION" \
     -var="budget_alert_email=$BUDGET_ALERT_EMAIL" \
+    -var="create_budget=$([[ "$CREATE_BUDGET" == "1" ]] && echo true || echo false)" \
     -var="monthly_budget_amount=$MONTHLY_BUDGET_AMOUNT" \
     -var="owner_tag=$OWNER_TAG"
 

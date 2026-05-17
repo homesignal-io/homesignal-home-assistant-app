@@ -118,8 +118,11 @@ only after `scripts/deploy.sh staging` and `scripts/smoke.sh staging` work
 locally.
 
 The first staging cloud deploy requires either `HOMESIGNAL_BUDGET_ALERT_EMAIL`
-so IaC can create an AWS Budget, or
+for the staging budget guardrail task, or
 `HOMESIGNAL_BUDGET_GUARDRAIL_CONFIRMED=1` when the guardrail already exists.
+When staging is an AWS Organizations member account, the actual AWS Budget may
+need to be enabled or created from the payer/management account rather than the
+member-account deploy workspace.
 
 ## Required Local Plan Checks
 
