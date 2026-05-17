@@ -1,13 +1,11 @@
 package controlplane
 
 import (
-	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"sync/atomic"
 	"time"
 
+	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/api"
 	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/config"
 )
 
@@ -22,8 +20,6 @@ type Response struct {
 	Body       []byte
 }
 
-var requestCounter atomic.Uint64
-
 func New(cfg config.Config, logger *slog.Logger) *App {
 	if logger == nil {
 		logger = slog.Default()
@@ -37,16 +33,14 @@ func New(cfg config.Config, logger *slog.Logger) *App {
 func (a *App) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		requestID := r.Header.Get("X-Request-Id")
-		if requestID == "" {
-			requestID = newRequestID()
-		}
+		requestContext := api.NewRequestContext(r)
 
-		response := a.Serve(r.Method, r.URL.Path, firstHeaderValues(r.Header), nil)
+		response := a.ServeWithContext(requestContext, r.Method, r.URL.Path, firstHeaderValues(r.Header), nil)
 		for key, value := range response.Headers {
 			w.Header().Set(key, value)
 		}
-		w.Header().Set("X-Request-Id", requestID)
+		w.Header().Set(api.RequestIDHeader, requestContext.RequestID)
+		w.Header().Set(api.CorrelationIDHeader, requestContext.CorrelationID)
 		w.WriteHeader(response.StatusCode)
 		_, _ = w.Write(response.Body)
 
@@ -56,16 +50,20 @@ func (a *App) Handler() http.Handler {
 			"path", r.URL.Path,
 			"status", response.StatusCode,
 			"duration_ms", time.Since(start).Milliseconds(),
-			"request_id", requestID,
+			"request_id", requestContext.RequestID,
+			"correlation_id", requestContext.CorrelationID,
+			"correlation_id_source", requestContext.CorrelationIDSource,
 		)
 	})
 }
 
 func (a *App) Serve(method string, path string, _ map[string]string, _ []byte) Response {
+	return a.ServeWithContext(api.NewSyntheticRequestContext(), method, path, nil, nil)
+}
+
+func (a *App) ServeWithContext(requestContext api.RequestContext, method string, path string, _ map[string]string, _ []byte) Response {
 	if method != http.MethodGet {
-		return jsonResponse(http.StatusMethodNotAllowed, map[string]any{
-			"error": "method_not_allowed",
-		})
+		return errorResponse(requestContext, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
 	}
 
 	switch path {
@@ -93,25 +91,25 @@ func (a *App) Serve(method string, path string, _ map[string]string, _ []byte) R
 			"version":     a.cfg.Version,
 		})
 	default:
-		return jsonResponse(http.StatusNotFound, map[string]any{
-			"error": "not_found",
-		})
+		return errorResponse(requestContext, http.StatusNotFound, "NOT_FOUND", "Not found.")
 	}
 }
 
 func jsonResponse(status int, body map[string]any) Response {
-	payload, err := json.Marshal(body)
-	if err != nil {
-		status = http.StatusInternalServerError
-		payload = []byte(`{"error":"internal_error"}`)
-	}
-
+	statusCode, headers, payload := api.JSONResponse(status, body)
 	return Response{
-		StatusCode: status,
-		Headers: map[string]string{
-			"Content-Type": "application/json; charset=utf-8",
-		},
-		Body: payload,
+		StatusCode: statusCode,
+		Headers:    headers,
+		Body:       payload,
+	}
+}
+
+func errorResponse(requestContext api.RequestContext, status int, code string, message string) Response {
+	statusCode, headers, body := api.JSONResponse(status, api.NewErrorEnvelope(requestContext, code, message, nil))
+	return Response{
+		StatusCode: statusCode,
+		Headers:    headers,
+		Body:       body,
 	}
 }
 
@@ -123,8 +121,4 @@ func firstHeaderValues(headers http.Header) map[string]string {
 		}
 	}
 	return values
-}
-
-func newRequestID() string {
-	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), requestCounter.Add(1))
 }

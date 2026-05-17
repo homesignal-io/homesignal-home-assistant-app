@@ -485,6 +485,10 @@ Read first:
 
 ### M2.1 Request Context And Error Envelope
 
+Status: implemented as a first platform/API seam. `backend/internal/platform/api`
+creates request/correlation IDs and standard error envelopes; the control-plane
+skeleton uses it for operational routes.
+
 Scope:
 
 - Common request context with request ID, actor subject, account/site scope,
