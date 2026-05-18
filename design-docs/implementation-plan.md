@@ -1531,6 +1531,11 @@ Acceptance:
 
 ### M10.2 Update Desired State
 
+Status: implemented as a domain/migration slice. Rollouts and per-device update
+assignments now write product truth first, project compact desired update state
+through the Edge State Adapter, and emit rollout audit events. Live API routes
+and rollout cohort expansion are still later integration work.
+
 Scope:
 
 - Add `rollouts` and `device_update_assignments` migrations.
