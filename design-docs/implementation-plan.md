@@ -1249,6 +1249,13 @@ Read first:
 
 ### M8.1 Command Service Core
 
+Status: first domain core implemented. `backend/internal/domain/commands`
+creates allowlisted command records for `refresh_publish_policy` and
+`trigger_backup`, enforces 15-second ACK windows, separates ACK/progress/result
+transitions, records ACK and result timeouts, and leaves automatic retry out of
+the non-idempotent path. SQL persistence, MQTT publishing, and live app ACKs
+remain follow-up slices.
+
 Scope:
 
 - Create command records.
