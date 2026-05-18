@@ -27,6 +27,7 @@ func main() {
 	var writer pipeline.PersistenceWriter = &pipeline.MemoryWriter{}
 	var failures pipeline.FailureSink = &pipeline.MemoryFailureSink{}
 	var authorityResolver pipeline.DeviceAuthorityResolver
+	var lifecycleWriter pipeline.LifecycleWriter = &pipeline.MemoryLifecycleWriter{}
 	if databaseURL := firstNonEmpty(os.Getenv("HOMESIGNAL_DATABASE_URL"), os.Getenv("DATABASE_URL")); databaseURL != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		pool, err := postgres.Open(ctx, databaseURL)
@@ -40,6 +41,7 @@ func main() {
 		writer = postgresWriter
 		failures = postgresWriter
 		authorityResolver = postgresWriter
+		lifecycleWriter = postgresWriter
 		logger.Info("postgres telemetry persistence enabled")
 	} else {
 		logger.Info("memory telemetry persistence enabled")
@@ -47,9 +49,10 @@ func main() {
 	runtimePipeline := pipeline.NewRuntimePipeline(writer, failures)
 	runtimePipeline.AuthorityResolver = authorityResolver
 	handler := app.NewHandler(app.Server{
-		Pipeline: runtimePipeline,
-		Version:  version,
-		Commit:   commit,
+		Pipeline:        runtimePipeline,
+		LifecycleWriter: lifecycleWriter,
+		Version:         version,
+		Commit:          commit,
 	})
 
 	logger.Info("telemetry ingest ready", "addr", addr)

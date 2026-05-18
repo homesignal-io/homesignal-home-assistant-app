@@ -1079,6 +1079,13 @@ Acceptance:
 
 ### M6.6 IoT Lifecycle Presence
 
+Status: first service path implemented for staging. Telemetry Ingest exposes a
+direct internal lifecycle endpoint, records lifecycle events, updates
+`device_presence` for connected/disconnected ordering, and the staging smoke
+posts a fixture connect event against the running task. The AWS IoT topic rule
+still logs lifecycle events until a stable Agent/API edge or private service
+ingress exists for IoT Core delivery.
+
 Scope:
 
 - Ingest AWS IoT lifecycle events.

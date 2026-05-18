@@ -210,6 +210,10 @@ Implementation checkpoint, 2026-05-14:
   credential fixture before posting telemetry so persistence and certificate
   authority resolution are DB-backed. Production-grade backpressure remains a
   later phase.
+- Phase 6 has a first lifecycle presence handler: a direct internal endpoint
+  accepts IoT-shaped lifecycle fixtures, stores `device_lifecycle_events`, and
+  updates `device_presence`. The live AWS IoT rule remains CloudWatch-log-only
+  until a stable service ingress exists.
 
 ### Phase 1: Service Skeleton And Contract Example Tests
 

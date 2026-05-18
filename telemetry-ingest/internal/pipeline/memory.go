@@ -81,3 +81,32 @@ func (s *MemoryFailureSink) Count() int {
 	defer s.mu.Unlock()
 	return len(s.Failures)
 }
+
+type MemoryLifecycleWriter struct {
+	mu     sync.Mutex
+	Events []LifecycleEvent
+}
+
+func (w *MemoryLifecycleWriter) WriteLifecycle(_ context.Context, event LifecycleEvent) (LifecycleResult, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Events = append(w.Events, event)
+	return LifecycleResult{
+		Accepted:        true,
+		DeviceID:        event.ClientID,
+		EventType:       event.EventType,
+		ConnectionState: lifecycleConnectionState(event.EventType),
+		ObservedAt:      event.ObservedAt,
+	}, nil
+}
+
+func lifecycleConnectionState(eventType string) string {
+	switch eventType {
+	case "connected":
+		return "online"
+	case "disconnected", "connect_failed":
+		return "disconnected"
+	default:
+		return "unknown"
+	}
+}

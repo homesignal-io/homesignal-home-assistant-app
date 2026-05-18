@@ -36,3 +36,24 @@ func TestTelemetryRouteRejectsWrongMethod(t *testing.T) {
 		t.Fatalf("expected method error, got %s", recorder.Body.String())
 	}
 }
+
+func TestLifecycleRouteAcceptsIoTShapedEvent(t *testing.T) {
+	handler := NewHandler(Server{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/internal/iot/lifecycle", strings.NewReader(`{
+		"lifecycle_event": "connected",
+		"client_id": "dev_01J00000000000000000000000",
+		"principal_id": "principal-fixture",
+		"sessionIdentifier": "session-fixture",
+		"timestamp": "2026-05-14T12:00:00Z"
+	}`))
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"connection_state":"online"`) {
+		t.Fatalf("expected online lifecycle response, got %s", recorder.Body.String())
+	}
+}

@@ -114,10 +114,21 @@ type TransportCredential struct {
 }
 
 type LifecycleEvent struct {
-	EventType         string
-	ClientID          string
-	SessionIdentifier string
-	ObservedAt        time.Time
+	EventType           string
+	ClientID            string
+	PrincipalIdentifier string
+	SessionIdentifier   string
+	VersionNumber       string
+	ObservedAt          time.Time
+	ReceivedAt          time.Time
+}
+
+type LifecycleResult struct {
+	Accepted        bool      `json:"accepted"`
+	DeviceID        string    `json:"device_id,omitempty"`
+	EventType       string    `json:"event_type,omitempty"`
+	ConnectionState string    `json:"connection_state,omitempty"`
+	ObservedAt      time.Time `json:"observed_at"`
 }
 
 type StateDecision struct {
@@ -172,6 +183,10 @@ type DedupeStore interface {
 
 type LifecycleEvaluator interface {
 	EvaluateLifecycle(ctx context.Context, event LifecycleEvent) error
+}
+
+type LifecycleWriter interface {
+	WriteLifecycle(ctx context.Context, event LifecycleEvent) (LifecycleResult, error)
 }
 
 type StateEvaluator interface {

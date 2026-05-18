@@ -66,8 +66,12 @@ scripts/smoke.sh staging
 ```
 
 The smoke script creates and cleans a non-customer `dev_smoke-*` fixture device
-plus fixture certificate credential around the telemetry checks. To run those
-fixture steps manually:
+plus fixture certificate credential around the telemetry checks. It also posts
+a direct IoT-shaped lifecycle connect event to the staging telemetry-ingest
+task. The AWS IoT lifecycle rule still writes to CloudWatch logs until the
+stable Agent/API ingress is wired.
+
+To run those fixture steps manually:
 
 ```bash
 scripts/staging-fixtures.sh staging seed-telemetry-device <dev_smoke-...>

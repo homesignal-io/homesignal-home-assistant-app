@@ -147,6 +147,18 @@ sed "s/\"message_id\": \"01J00000000000000000000000\"/\"message_id\": \"${SMOKE_
 echo "Seeding staging telemetry fixture"
 "$ROOT/scripts/staging-fixtures.sh" staging seed-telemetry-device "$SMOKE_DEVICE_ID" >/dev/null
 
+echo "Checking telemetry-ingest records IoT lifecycle connect"
+LIFECYCLE_RESPONSE="$(
+  curl -fsS \
+    -H "Content-Type: application/json" \
+    --data-binary "{\"lifecycle_event\":\"connected\",\"client_id\":\"$SMOKE_DEVICE_ID\",\"principal_id\":\"principal-fixture\",\"sessionIdentifier\":\"${SMOKE_ID_PREFIX}-session\",\"timestamp\":\"2026-05-14T12:00:30Z\"}" \
+    "$TELEMETRY_URL/internal/iot/lifecycle"
+)"
+if [[ "$LIFECYCLE_RESPONSE" != *'"accepted":true'* || "$LIFECYCLE_RESPONSE" != *'"connection_state":"online"'* ]]; then
+  echo "Unexpected lifecycle response: $LIFECYCLE_RESPONSE" >&2
+  exit 1
+fi
+
 echo "Checking telemetry-ingest accepts first health snapshot"
 FIRST_RESPONSE="$(
   curl -fsS \
