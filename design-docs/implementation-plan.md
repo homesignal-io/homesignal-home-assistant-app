@@ -1320,6 +1320,13 @@ Acceptance:
 
 ### M8.4 App Command Receiver
 
+Status: first local receiver core implemented. The HomeSignal app can parse a
+fake MQTT command notice, enforce topic/device identity, reject expired,
+unknown, or locally disallowed command types, fetch command detail through a
+fake Agent HTTPS client, validate detail/notice consistency, and ACK
+accepted/rejected. Real MQTT subscription wiring and mTLS HTTPS transport remain
+follow-up work.
+
 Scope:
 
 - App subscribes to command topic.
