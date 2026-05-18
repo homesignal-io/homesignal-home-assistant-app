@@ -1411,6 +1411,14 @@ Acceptance:
 
 ### M9.3 Backup Service MVP
 
+Status: first backup domain core implemented. Migration `000005_backup_service`
+adds backup policy, run, and device status tables. `backend/internal/domain/backups`
+can trigger a `trigger_backup` command, create a backup run, update in-progress
+device backup status, interpret terminal command results, attach an artifact
+upload ID to successful runs, track last success/failure, and detect overdue
+status outside active runs. Authorization, SQL adapters, portal wiring, and app
+backup execution remain follow-up work.
+
 Scope:
 
 - Add `backups` migration.
