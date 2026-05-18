@@ -30,18 +30,6 @@ resource "aws_cognito_user_pool" "portal_users" {
     temporary_password_validity_days = 7
   }
 
-  schema {
-    name                = "email"
-    attribute_data_type = "String"
-    required            = true
-    mutable             = true
-
-    string_attribute_constraints {
-      min_length = 3
-      max_length = 320
-    }
-  }
-
   tags = merge(local.tags, {
     Boundary = "auth"
   })

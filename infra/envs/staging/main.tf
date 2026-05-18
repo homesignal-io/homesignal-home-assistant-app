@@ -98,6 +98,7 @@ resource "aws_lambda_function" "control_plane" {
 
   depends_on = [
     aws_cloudwatch_log_group.control_plane,
+    aws_iam_role_policy.control_plane_database_secret,
     aws_iam_role_policy_attachment.lambda_basic,
   ]
 }
