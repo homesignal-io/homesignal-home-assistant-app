@@ -1181,6 +1181,12 @@ Acceptance:
 
 ### M7.2 Edge State Adapter Interface
 
+Status: first domain seam implemented. `backend/internal/domain/edgestate`
+stores desired edge state before calling a shadow adapter interface, validates
+only the v0 `publish_policy` and `update` state keys, and has fake-adapter
+tests for DB-first ordering and adapter failure behavior. SQL and AWS named
+shadow adapters remain follow-up slices.
+
 Scope:
 
 - Interface for writing desired `homesignal_edge` shadow.
