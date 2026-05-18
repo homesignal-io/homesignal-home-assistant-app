@@ -10,6 +10,7 @@ import (
 
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/controlplane"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/lambdaproxy"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/authn"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/database"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/readmodels"
@@ -34,6 +35,7 @@ func main() {
 
 	options := []controlplane.Option{}
 	databaseConfig := database.LoadConfigFromEnv()
+	cognitoConfig := authn.LoadCognitoConfigFromEnv()
 	if databaseConfig.URL == "" && databaseConfig.SecretID != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		secretClient, err := secrets.NewSecretsManagerClient(ctx, cfg.AWSRegion)
@@ -56,6 +58,21 @@ func main() {
 		}
 		defer db.Close()
 		options = append(options, controlplane.WithPublicReadModels(readmodels.Store{DB: db}))
+
+		if cognitoConfig.Enabled() {
+			verifier, err := authn.NewCognitoVerifier(cognitoConfig)
+			if err != nil {
+				logger.Error("configure Cognito verifier", "error", err)
+				os.Exit(1)
+			}
+			options = append(options, controlplane.WithHumanAuthenticator(authn.HumanAuthenticator{
+				Verifier: verifier,
+				Users:    authn.PostgresAuthRepository{DB: db},
+			}))
+		}
+	} else if cognitoConfig.Enabled() {
+		logger.Error("Cognito human authentication requires database configuration")
+		os.Exit(1)
 	}
 
 	app := controlplane.New(cfg, logger, options...)

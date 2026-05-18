@@ -506,22 +506,25 @@ Acceptance:
 
 ### M2.2 AuthN Adapter
 
-Status: implemented as an interface/fake seam and wired into the control-plane
-route shell. `backend/internal/platform/authn` parses bearer credentials,
-verifies through an adapter interface, maps Cognito subjects to local `users`
-through `AuthRepository`, and protected public routes fail closed when human
-authentication is not configured. Live Cognito JWKS configuration remains an
-environment/provider wiring step.
+Status: implemented as an interface/fake seam plus an env-gated Cognito/JWKS
+verifier and Postgres-backed `AuthRepository`. The control-plane route shell
+parses bearer credentials, verifies Cognito JWT signature/issuer/client/token
+use/expiration, maps Cognito subjects to local `users`, and protected public
+routes fail closed when human authentication is not configured. Cognito pool,
+client, hosted UI, and portal login wiring remain deployment follow-ups.
 
 Scope:
 
 - Cognito JWT verifier interface.
 - Local/dev fake verifier.
 - Subject mapping to local `users`.
+- Postgres-backed permission key lookup for account membership and direct
+  access grants.
 
 Tests:
 
 - Fake verifier route tests.
+- Cognito JWKS verifier tests.
 - Invalid token path.
 
 Acceptance:

@@ -20,7 +20,7 @@ type App struct {
 	idempotency          *idempotencyStore
 	rateLimiter          *rateLimiter
 	serviceAuthenticator authn.ServiceAuthenticator
-	humanAuthenticator   humanAuthenticator
+	humanAuthenticator   HumanAuthenticator
 	publicReadModels     PublicReadModelProvider
 }
 
@@ -30,7 +30,7 @@ type Response struct {
 	Body       []byte
 }
 
-type humanAuthenticator interface {
+type HumanAuthenticator interface {
 	Authenticate(ctx context.Context, authorizationHeader string) (authn.Subject, error)
 }
 
@@ -39,6 +39,12 @@ type Option func(*App)
 func WithPublicReadModels(provider PublicReadModelProvider) Option {
 	return func(app *App) {
 		app.publicReadModels = provider
+	}
+}
+
+func WithHumanAuthenticator(authenticator HumanAuthenticator) Option {
+	return func(app *App) {
+		app.humanAuthenticator = authenticator
 	}
 }
 

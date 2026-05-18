@@ -72,6 +72,12 @@ a direct IoT-shaped lifecycle connect event to the staging telemetry-ingest
 task. The AWS IoT lifecycle rule still writes to CloudWatch logs until the
 stable Agent/API ingress is wired.
 
+Human portal/API authentication is disabled until Cognito is provisioned. When
+ready, configure the control-plane runtime with `HOMESIGNAL_COGNITO_ISSUER`,
+`HOMESIGNAL_COGNITO_CLIENT_ID`, and optional `HOMESIGNAL_COGNITO_TOKEN_USE`
+(`access` by default). The runtime maps verified Cognito subjects to local
+Postgres `users.cognito_sub` values before authorization.
+
 To run those fixture steps manually:
 
 ```bash
