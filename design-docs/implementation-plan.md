@@ -1610,6 +1610,10 @@ Read first:
 
 ### M11.1 Alert Candidate Intake
 
+Status: implemented as a domain/migration slice. Alert candidates are recorded
+idempotently, then verified against current state by an injected verifier before
+creating, updating, resolving, or ignoring a product alert.
+
 Scope:
 
 - Internal route or in-process adapter for candidates.
@@ -1625,6 +1629,9 @@ Acceptance:
 - Alert candidates are wake-up signals, not authority.
 
 ### M11.2 Alert Lifecycle
+
+Status: implemented as a domain/migration slice. Alerts and alert events support
+create/update/resolve/ack/snooze for the initial v0 customer-facing families.
 
 Scope:
 
