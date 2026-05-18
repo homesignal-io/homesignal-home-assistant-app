@@ -181,6 +181,8 @@ type fakeUpdateRepository struct {
 	rolloutStatuses    map[string]RolloutStatus
 	assignments        map[string]DeviceUpdateAssignment
 	projectionStatuses map[string]AssignmentStatus
+	updateStatuses     map[string]DeviceUpdateStatus
+	projections        []edgestate.Projection
 	auditEvents        []RolloutAuditEvent
 }
 
@@ -190,6 +192,7 @@ func newFakeUpdateRepository() *fakeUpdateRepository {
 		rolloutStatuses:    map[string]RolloutStatus{},
 		assignments:        map[string]DeviceUpdateAssignment{},
 		projectionStatuses: map[string]AssignmentStatus{},
+		updateStatuses:     map[string]DeviceUpdateStatus{},
 	}
 }
 
@@ -218,6 +221,16 @@ func (r *fakeUpdateRepository) CreateDeviceAssignment(_ context.Context, assignm
 
 func (r *fakeUpdateRepository) SaveDeviceAssignmentProjection(_ context.Context, assignmentID string, status AssignmentStatus, _ *time.Time, _ string) error {
 	r.projectionStatuses[assignmentID] = status
+	return nil
+}
+
+func (r *fakeUpdateRepository) UpsertDeviceUpdateStatus(_ context.Context, status DeviceUpdateStatus) error {
+	r.updateStatuses[status.DeviceID] = status
+	return nil
+}
+
+func (r *fakeUpdateRepository) UpsertUpdateProjection(_ context.Context, projection edgestate.Projection) error {
+	r.projections = append(r.projections, projection)
 	return nil
 }
 

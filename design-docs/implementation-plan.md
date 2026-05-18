@@ -1554,6 +1554,11 @@ Acceptance:
 
 ### M10.3 Update Status/Repair Command
 
+Status: implemented as a domain/app seam. The command allowlist now includes
+only bounded `check_update_status` and `repair_update_state` update commands,
+reported update status updates a compact read model/projection, and no binary
+stage/apply command exists for v0.
+
 Scope:
 
 - Bounded status/check/repair commands only.

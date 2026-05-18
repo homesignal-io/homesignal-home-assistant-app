@@ -14,6 +14,8 @@ const (
 	commandTypeRefreshPublishPolicy = "refresh_publish_policy"
 	commandTypeTriggerBackup        = "trigger_backup"
 	commandTypeUploadArtifact       = "upload_artifact"
+	commandTypeCheckUpdateStatus    = "check_update_status"
+	commandTypeRepairUpdateState    = "repair_update_state"
 
 	commandACKAccepted = "accepted"
 	commandACKRejected = "rejected"
@@ -196,7 +198,7 @@ func validateCommandDetailMatchesNotice(detail AgentCommandDetail, notice MQTTCo
 
 func knownLocalCommandType(commandType string) bool {
 	switch commandType {
-	case commandTypeRefreshPublishPolicy, commandTypeTriggerBackup, commandTypeUploadArtifact:
+	case commandTypeRefreshPublishPolicy, commandTypeTriggerBackup, commandTypeUploadArtifact, commandTypeCheckUpdateStatus, commandTypeRepairUpdateState:
 		return true
 	default:
 		return false

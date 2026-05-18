@@ -119,6 +119,8 @@ type UpdateRepository interface {
 	SaveRolloutStatus(ctx context.Context, rolloutID string, status RolloutStatus, changedAt time.Time, reasonCode string) error
 	CreateDeviceAssignment(ctx context.Context, assignment DeviceUpdateAssignment) error
 	SaveDeviceAssignmentProjection(ctx context.Context, assignmentID string, status AssignmentStatus, projectedAt *time.Time, reasonCode string) error
+	UpsertDeviceUpdateStatus(ctx context.Context, status DeviceUpdateStatus) error
+	UpsertUpdateProjection(ctx context.Context, projection edgestate.Projection) error
 	RecordRolloutAudit(ctx context.Context, event RolloutAuditEvent) error
 }
 
@@ -127,10 +129,11 @@ type EdgeStateWriter interface {
 }
 
 type UpdateService struct {
-	Repository  UpdateRepository
-	EdgeState   EdgeStateWriter
-	IDGenerator IDGenerator
-	Clock       Clock
+	Repository     UpdateRepository
+	EdgeState      EdgeStateWriter
+	CommandCreator UpdateCommandCreator
+	IDGenerator    IDGenerator
+	Clock          Clock
 }
 
 func (s UpdateService) CreateRollout(ctx context.Context, req CreateRolloutRequest) (Rollout, error) {

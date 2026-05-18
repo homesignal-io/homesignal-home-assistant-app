@@ -27,6 +27,8 @@ const (
 	TypeDisableDebugCapture  CommandType = "disable_debug_capture"
 	TypeCollectDebugSnapshot CommandType = "collect_debug_snapshot"
 	TypeRequestDebugBundle   CommandType = "request_debug_bundle"
+	TypeCheckUpdateStatus    CommandType = "check_update_status"
+	TypeRepairUpdateState    CommandType = "repair_update_state"
 )
 
 type Status string
@@ -168,6 +170,16 @@ func DefaultDefinitions() map[CommandType]CommandDefinition {
 			AckWindow:    15 * time.Second,
 			ResultWindow: 30 * time.Minute,
 			Idempotent:   false,
+		},
+		TypeCheckUpdateStatus: {
+			AckWindow:    15 * time.Second,
+			ResultWindow: 2 * time.Minute,
+			Idempotent:   true,
+		},
+		TypeRepairUpdateState: {
+			AckWindow:    15 * time.Second,
+			ResultWindow: 5 * time.Minute,
+			Idempotent:   true,
 		},
 	}
 }

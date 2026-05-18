@@ -48,6 +48,40 @@ func TestCommandReceiverAcceptsKnownAllowedCommand(t *testing.T) {
 	}
 }
 
+func TestCommandReceiverAcceptsBoundedUpdateStatusCommand(t *testing.T) {
+	now := time.Date(2026, 5, 18, 12, 0, 2, 0, time.UTC)
+	client := &fakeAgentCommandClient{
+		details: map[string]AgentCommandDetail{
+			"cmd_123": {
+				CommandID:   "cmd_123",
+				CommandType: commandTypeCheckUpdateStatus,
+				DeviceID:    "dev_123",
+				Payload:     json.RawMessage(`{"operation":"check_update_status"}`),
+			},
+		},
+	}
+	receiver := CommandReceiver{
+		Client: client,
+		Policy: LocalCommandPolicy{AllowedTypes: map[string]bool{
+			commandTypeCheckUpdateStatus: true,
+		}},
+		Now: func() time.Time { return now },
+	}
+
+	decision, err := receiver.HandleMQTTCommandNotice(
+		context.Background(),
+		"homesignal/devices/dev_123/commands",
+		commandNoticePayload(t, commandTypeCheckUpdateStatus, now.Add(-time.Second), now.Add(14*time.Second)),
+		"dev_123",
+	)
+	if err != nil {
+		t.Fatalf("handle update status command notice: %v", err)
+	}
+	if decision.Status != commandACKAccepted {
+		t.Fatalf("expected accepted decision, got %#v", decision)
+	}
+}
+
 func TestCommandReceiverRejectsUnknownCommandType(t *testing.T) {
 	now := time.Date(2026, 5, 18, 12, 0, 2, 0, time.UTC)
 	client := &fakeAgentCommandClient{details: map[string]AgentCommandDetail{}}
