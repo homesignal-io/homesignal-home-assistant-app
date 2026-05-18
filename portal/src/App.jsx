@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getActivity, getDashboard, getDevices } from "./api.js";
 import { primaryActionLabel, routeForPrimaryAction } from "./actions.js";
+import { beginSignIn, completeSignInFromLocation, getAuthState, signOut } from "./auth.js";
 
 const pages = ["Dashboard", "Devices", "Alerts", "Activity", "Enrollment", "Settings"];
 const publicPages = new Set([...pages, "Device Detail"]);
@@ -28,7 +29,30 @@ function writeRoute(route) {
   window.history.pushState(null, "", `#${params.toString()}`);
 }
 
-function usePortalData() {
+function useAuthSession() {
+  const [state, setState] = useState({ status: "checking", ...getAuthState(), error: null });
+
+  useEffect(() => {
+    let active = true;
+    completeSignInFromLocation()
+      .then((authState) => {
+        if (!active) return;
+        setState({ status: "ready", ...authState, error: null });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setState({ status: "error", ...getAuthState(), error });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return state;
+}
+
+function usePortalData(auth) {
   const [state, setState] = useState({
     status: "loading",
     dashboard: null,
@@ -39,7 +63,13 @@ function usePortalData() {
 
   useEffect(() => {
     let active = true;
+    if (auth.status === "checking") return undefined;
+    if (auth.configured && !auth.signedIn) {
+      setState({ status: "signed_out", dashboard: null, devices: null, activity: null, error: null });
+      return undefined;
+    }
 
+    setState((current) => ({ ...current, status: "loading", error: null }));
     Promise.all([getDashboard(), getDevices(), getActivity()])
       .then(([dashboard, devices, activity]) => {
         if (!active) return;
@@ -53,13 +83,14 @@ function usePortalData() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [auth.configured, auth.signedIn, auth.status]);
 
   return state;
 }
 
 export default function App() {
-  const data = usePortalData();
+  const auth = useAuthSession();
+  const data = usePortalData(auth);
   const [route, setRoute] = useState(readRoute);
 
   useEffect(() => {
@@ -101,12 +132,19 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <AuthControls auth={auth} />
       </aside>
 
       <main className="main">
-        {data.status === "loading" && <LoadingState />}
-        {data.status === "error" && <ErrorState error={data.error} />}
-        {data.status === "ready" && (
+        {auth.status === "error" ? (
+          <ErrorState error={auth.error} action={<button className="primary-button" type="button" onClick={beginSignIn}>Sign in</button>} />
+        ) : data.status === "loading" ? (
+          <LoadingState />
+        ) : data.status === "signed_out" ? (
+          <SignInState />
+        ) : data.status === "error" ? (
+          <ErrorState error={data.error} action={auth.configured ? <button className="primary-button" type="button" onClick={beginSignIn}>Sign in</button> : null} />
+        ) : data.status === "ready" ? (
           <>
             {route.page === "Dashboard" && (
               <Dashboard
@@ -127,8 +165,20 @@ export default function App() {
             {route.page === "Enrollment" && <EnrollmentPage deviceRows={deviceRows} />}
             {route.page === "Settings" && <SettingsPage dashboard={data.dashboard} />}
           </>
-        )}
+        ) : null}
       </main>
+    </div>
+  );
+}
+
+function AuthControls({ auth }) {
+  if (!auth.configured) return null;
+  return (
+    <div className="auth-controls">
+      <div className="muted">{auth.signedIn ? "Cognito session active" : "Cognito session required"}</div>
+      <button className="secondary-button" type="button" onClick={auth.signedIn ? signOut : beginSignIn}>
+        {auth.signedIn ? "Sign out" : "Sign in"}
+      </button>
     </div>
   );
 }
@@ -143,11 +193,25 @@ function LoadingState() {
   );
 }
 
-function ErrorState({ error }) {
+function ErrorState({ error, action }) {
   return (
     <section className="page narrow">
       <PageHeader title="Portal unavailable" subtitle="The read models could not be loaded." />
       <div className="notice danger">{error?.message || "Unknown error"}</div>
+      {action}
+    </section>
+  );
+}
+
+function SignInState() {
+  return (
+    <section className="page narrow">
+      <PageHeader
+        eyebrow="Authentication"
+        title="Sign In"
+        subtitle="Use your HomeSignal staging portal account to load live read models."
+        action={<button className="primary-button" type="button" onClick={beginSignIn}>Sign in</button>}
+      />
     </section>
   );
 }

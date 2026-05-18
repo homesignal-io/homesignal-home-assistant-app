@@ -104,6 +104,18 @@ button {
   gap: 4px;
 }
 
+.auth-controls {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+  border-top: 1px solid #e2e7de;
+  padding-top: 16px;
+}
+
+.auth-controls .secondary-button {
+  width: 100%;
+}
+
 .nav-item {
   width: 100%;
   border: 0;
