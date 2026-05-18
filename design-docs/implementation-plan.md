@@ -1472,6 +1472,15 @@ Acceptance:
 
 ### M9.5 App Artifact Upload Handler
 
+Status: first local handler core implemented. The app validates an
+`upload_artifact` command detail, generates only allowlisted local artifact
+references through a generator seam, requests an Agent HTTPS upload session,
+validates HTTPS/PUT/content-type/size/expiry, uploads through a signed-URL
+uploader seam, completes the upload, and reports terminal command result.
+Upload failures emit one bounded `artifact_upload_failed` alarm with
+`more_logs_available=false`. Real mTLS client, artifact generators, and object
+storage upload transport remain follow-up work.
+
 Scope:
 
 - Generate only allowlisted artifacts.

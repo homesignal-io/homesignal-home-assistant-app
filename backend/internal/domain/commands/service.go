@@ -22,6 +22,7 @@ const (
 
 	TypeRefreshPublishPolicy CommandType = "refresh_publish_policy"
 	TypeTriggerBackup        CommandType = "trigger_backup"
+	TypeUploadArtifact       CommandType = "upload_artifact"
 	TypeEnableDebugCapture   CommandType = "enable_debug_capture"
 	TypeDisableDebugCapture  CommandType = "disable_debug_capture"
 	TypeCollectDebugSnapshot CommandType = "collect_debug_snapshot"
@@ -139,6 +140,11 @@ func DefaultDefinitions() map[CommandType]CommandDefinition {
 			Idempotent:   true,
 		},
 		TypeTriggerBackup: {
+			AckWindow:    15 * time.Second,
+			ResultWindow: 30 * time.Minute,
+			Idempotent:   false,
+		},
+		TypeUploadArtifact: {
 			AckWindow:    15 * time.Second,
 			ResultWindow: 30 * time.Minute,
 			Idempotent:   false,
