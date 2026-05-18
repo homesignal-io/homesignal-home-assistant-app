@@ -1440,6 +1440,14 @@ Acceptance:
 
 ### M9.4 Diagnostics And Debug Session MVP
 
+Status: first diagnostics/debug metadata core implemented. Migration
+`000006_diagnostics_debug` adds debug session and diagnostic bundle tables.
+`backend/internal/domain/diagnostics` enforces internal/support-only debug
+session start, default 1-hour TTL, hard 24-hour max TTL, audit event emission,
+debug capture command creation, and diagnostic bundle metadata linked to
+approved command/artifact records. Real SQL adapters, internal routes, and app
+debug/artifact execution remain follow-up work.
+
 Scope:
 
 - Add `debug_sessions` and `diagnostic_bundles` migrations.

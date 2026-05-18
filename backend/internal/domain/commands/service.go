@@ -22,6 +22,10 @@ const (
 
 	TypeRefreshPublishPolicy CommandType = "refresh_publish_policy"
 	TypeTriggerBackup        CommandType = "trigger_backup"
+	TypeEnableDebugCapture   CommandType = "enable_debug_capture"
+	TypeDisableDebugCapture  CommandType = "disable_debug_capture"
+	TypeCollectDebugSnapshot CommandType = "collect_debug_snapshot"
+	TypeRequestDebugBundle   CommandType = "request_debug_bundle"
 )
 
 type Status string
@@ -135,6 +139,26 @@ func DefaultDefinitions() map[CommandType]CommandDefinition {
 			Idempotent:   true,
 		},
 		TypeTriggerBackup: {
+			AckWindow:    15 * time.Second,
+			ResultWindow: 30 * time.Minute,
+			Idempotent:   false,
+		},
+		TypeEnableDebugCapture: {
+			AckWindow:    15 * time.Second,
+			ResultWindow: 5 * time.Minute,
+			Idempotent:   true,
+		},
+		TypeDisableDebugCapture: {
+			AckWindow:    15 * time.Second,
+			ResultWindow: 5 * time.Minute,
+			Idempotent:   true,
+		},
+		TypeCollectDebugSnapshot: {
+			AckWindow:    15 * time.Second,
+			ResultWindow: 10 * time.Minute,
+			Idempotent:   true,
+		},
+		TypeRequestDebugBundle: {
 			AckWindow:    15 * time.Second,
 			ResultWindow: 30 * time.Minute,
 			Idempotent:   false,
