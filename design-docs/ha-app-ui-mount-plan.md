@@ -27,6 +27,27 @@ Home Assistant ingress
 The UI must feel like a local Home Assistant app panel, not the HomeSignal
 cloud app.
 
+## Design Fidelity Gate
+
+For the Home Assistant app, `design-mock/src/App.jsx` is the product source of
+truth, not a mood board. The mounted app UI should be a copy/paste-grade port
+of the mock surface listed below.
+
+Implementation must preserve:
+
+- information architecture, page order, and navigation labels
+- visible copy, button labels, badges, empty states, and warning text
+- component density, spacing, hierarchy, and Home Assistant-style control shape
+- status, loading, degraded, paired, unpaired, revoked, and action-required
+  states
+- responsive behavior at Home Assistant ingress widths
+
+Acceptable deviations are limited to real Home Assistant ingress/runtime
+constraints, accessibility fixes, or replacing mock data with live adapter
+data. Each deviation must be logged in the implementation notes with the reason
+and the closest matching behavior from the mock. "Inspired by the mock" is not
+complete for the Home Assistant app.
+
 ## What Moves From The Mock
 
 Move only the Home Assistant app surface:
@@ -218,19 +239,22 @@ unsaved draft policy on the Permissions page.
 
 ## Implementation Steps
 
-1. Extract the HA app UI components from `design-mock/src/App.jsx` into a
-   small frontend package.
-2. Split mock state from view components.
-3. Add `mockAppAdapter` for design review and `httpAppAdapter` for the real
+1. Capture reference screenshots from the mock for Status, Pairing,
+   Permissions, Advanced, drawers/dialogs, and degraded/error states.
+2. Extract the HA app UI components from `design-mock/src/App.jsx` into a
+   small frontend package without restyling or changing copy.
+3. Split mock state from view components.
+4. Add `mockAppAdapter` for design review and `httpAppAdapter` for the real
    app.
-4. Add Go UI API route handlers under `homesignal/cmd/agent`.
-5. Replace inline `uiHTML` with embedded or file-served static React assets.
-6. Add the local logging service and expose logging status in Advanced.
-7. Build the frontend in the app Docker image.
-8. Add local tests for API view models, static shell serving, logging budget
+5. Add Go UI API route handlers under `homesignal/cmd/agent`.
+6. Replace inline `uiHTML` with embedded or file-served static React assets.
+7. Add the local logging service and expose logging status in Advanced.
+8. Build the frontend in the app Docker image.
+9. Add local tests for API view models, static shell serving, logging budget
    behavior, and log bundle generation.
-9. Add browser smoke coverage for Status, Pairing, Permissions, Advanced, and
-   logging status.
+10. Add browser smoke coverage for Status, Pairing, Permissions, Advanced, and
+   logging status, comparing the mounted app against the reference screenshots
+   before calling the UI done.
 
 ## Current Prep Done
 
@@ -238,3 +262,5 @@ unsaved draft policy on the Permissions page.
   under Home Assistant ingress prefixes.
 - `design-mock/src/App.jsx` marks `HaApp` as the real app mount candidate
   and points to this document.
+- App UI implementation now has an explicit fidelity gate: direct mock port
+  first, logged platform deviations only.

@@ -54,6 +54,11 @@ The current `/ui` page is a small inline Go template. The intended product UI
 is the HomeSignal Manager React surface currently being refined in
 `../design-mock/src/App.jsx`.
 
+The React surface is the design source of truth for the Home Assistant app. The
+mounted app should port it directly, preserving layout, copy, states, spacing,
+and responsive behavior except where Home Assistant ingress/runtime constraints
+force a logged deviation.
+
 Mounting direction:
 
 - Build the app UI as static assets with relative paths.

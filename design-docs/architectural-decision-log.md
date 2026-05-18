@@ -1296,7 +1296,9 @@ bounded local log retention, and cloud-authorized app log retrieval. The
 app should mount the HomeSignal Manager React UI as static assets behind Home
 Assistant ingress, keep Go as the local authority/runtime owner, split UI reads
 through a local adapter, and implement local diagnostic logging as a fixed-budget
-ring under `/config/logs`. Routine cloud log visibility remains collapsed
+ring under `/config/logs`. The Home Assistant app UI is a direct port of the
+settled mock, not a loose reinterpretation; platform-driven deviations must be
+logged against the mock behavior. Routine cloud log visibility remains collapsed
 telemetry summaries governed by publish policy. Cloud-requested internal app
 logs use the existing command plus Artifact Upload Broker pattern with purpose
 `error_log_bundle`; cloud may request by local artifact reference or bounded
