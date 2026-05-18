@@ -67,6 +67,8 @@ points:
   `scripts/smoke.sh`, `scripts/logs.sh`, `scripts/migrate.sh`,
   `scripts/rotate-db-credentials.sh`, and
   `scripts/cleanup-staging-fixtures.sh`
+- Operator-safe staging database secret helper:
+  `scripts/set-staging-database-url.sh`
 - Database migration surface: `backend/migrations`, `backend/cmd/migrate`, and
   AWS secret metadata for `/homesignal/staging/platform/database_url`
 

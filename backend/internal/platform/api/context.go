@@ -26,6 +26,9 @@ type RequestContext struct {
 	RequestID           string
 	CorrelationID       string
 	CorrelationIDSource CorrelationIDSource
+	ActorType           string
+	ActorID             string
+	AuthMethod          string
 	SourceIP            string
 	UserAgent           string
 	RouteTemplate       string

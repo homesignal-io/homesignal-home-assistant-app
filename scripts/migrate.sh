@@ -25,6 +25,9 @@ Usage: scripts/migrate.sh staging [plan|status|status-if-configured|up]
 
 Set HOMESIGNAL_DATABASE_URL or store the plain PostgreSQL URL in:
   $SECRET_NAME
+
+For staging, use scripts/set-staging-database-url.sh to store it without
+placing the URL in shell history.
 USAGE
 }
 

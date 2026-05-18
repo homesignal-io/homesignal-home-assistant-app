@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,12 +20,17 @@ type App struct {
 	idempotency          *idempotencyStore
 	rateLimiter          *rateLimiter
 	serviceAuthenticator authn.ServiceAuthenticator
+	humanAuthenticator   humanAuthenticator
 }
 
 type Response struct {
 	StatusCode int
 	Headers    map[string]string
 	Body       []byte
+}
+
+type humanAuthenticator interface {
+	Authenticate(ctx context.Context, authorizationHeader string) (authn.Subject, error)
 }
 
 func New(cfg config.Config, logger *slog.Logger) *App {
@@ -138,6 +144,15 @@ func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method str
 	if route.Auth == publicAuthHuman && strings.TrimSpace(headerValue(headers, "Authorization")) == "" {
 		return errorResponse(requestContext, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication required.")
 	}
+	if route.Auth == publicAuthHuman {
+		subject, response, ok := a.authenticateHuman(requestContext, headers)
+		if !ok {
+			return response
+		}
+		requestContext.ActorType = subject.Type
+		requestContext.ActorID = string(subject.ID)
+		requestContext.AuthMethod = subject.AuthMethod
+	}
 
 	produce := func() Response {
 		if ok, retryAfter := a.allowRoute(requestContext, route.Pattern); !ok {
@@ -162,6 +177,20 @@ func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method str
 	}
 
 	return produce()
+}
+
+func (a *App) authenticateHuman(requestContext api.RequestContext, headers map[string]string) (authn.Subject, Response, bool) {
+	if a.humanAuthenticator == nil {
+		return authn.Subject{}, errorResponse(requestContext, http.StatusServiceUnavailable, "AUTHENTICATION_UNCONFIGURED", "Human authentication is not configured."), false
+	}
+	subject, err := a.humanAuthenticator.Authenticate(context.Background(), headerValue(headers, "Authorization"))
+	if err == nil {
+		return subject, Response{}, true
+	}
+	if errors.Is(err, authn.ErrMissingCredential) {
+		return authn.Subject{}, errorResponse(requestContext, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication required."), false
+	}
+	return authn.Subject{}, errorResponse(requestContext, http.StatusUnauthorized, "AUTHENTICATION_INVALID", "Authentication failed."), false
 }
 
 func (a *App) handleAgentRoute(requestContext api.RequestContext, method string, path string, headers map[string]string) Response {
@@ -247,6 +276,9 @@ func (a *App) allowRoute(requestContext api.RequestContext, routePattern string)
 }
 
 func rateLimitSubject(requestContext api.RequestContext) string {
+	if requestContext.ActorID != "" {
+		return requestContext.ActorType + ":" + requestContext.ActorID
+	}
 	if requestContext.SourceIP != "" {
 		return requestContext.SourceIP
 	}

@@ -53,9 +53,7 @@ password in Terraform state. After creating the HomeSignal Neon database in
 `us-east-1`, store the plain PostgreSQL connection URL in:
 
 ```bash
-aws secretsmanager put-secret-value \
-  --secret-id /homesignal/staging/platform/database_url \
-  --secret-string "$HOMESIGNAL_DATABASE_URL"
+scripts/set-staging-database-url.sh staging
 ```
 
 Then run:

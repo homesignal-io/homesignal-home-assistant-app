@@ -11,8 +11,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/domain/ports"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/authn"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
+
+func newTestApp() *App {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	verifier := authn.NewFakeVerifier()
+	verifier.Tokens["test-token"] = authn.Claims{Subject: "cognito-sub", Email: "person@example.com", TokenUse: "access"}
+	users := ports.NewFakeAuthRepository()
+	users.UsersBySubject["cognito-sub"] = ports.UserSubject{
+		ID:         "user_123",
+		CognitoSub: "cognito-sub",
+		Email:      "person@example.com",
+		Status:     "active",
+	}
+	app.humanAuthenticator = authn.HumanAuthenticator{Verifier: verifier, Users: users}
+	return app
+}
 
 func TestOperationalRoutes(t *testing.T) {
 	app := New(config.Config{
@@ -165,11 +186,7 @@ func TestRegisteredPublicRoutesMustHaveOpenAPIOperations(t *testing.T) {
 }
 
 func TestRouteShellAuthBoundaries(t *testing.T) {
-	app := New(config.Config{
-		Environment: "test",
-		ServiceName: "control-plane",
-		Version:     "test-version",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app := newTestApp()
 
 	tests := []struct {
 		name       string
@@ -193,6 +210,14 @@ func TestRouteShellAuthBoundaries(t *testing.T) {
 			headers:    map[string]string{"Authorization": "Bearer test-token"},
 			wantStatus: http.StatusNotImplemented,
 			wantCode:   "ROUTE_NOT_IMPLEMENTED",
+		},
+		{
+			name:       "public human route rejects invalid token",
+			method:     http.MethodGet,
+			path:       "/api/v1/dashboard",
+			headers:    map[string]string{"Authorization": "Bearer unknown-token"},
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "AUTHENTICATION_INVALID",
 		},
 		{
 			name:       "agent route requires device certificate metadata",
@@ -241,6 +266,24 @@ func TestRouteShellAuthBoundaries(t *testing.T) {
 	}
 }
 
+func TestPublicHumanRouteFailsClosedWhenAuthUnconfigured(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	response := app.Serve(http.MethodGet, "/api/v1/dashboard", map[string]string{"Authorization": "Bearer token"}, nil)
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusServiceUnavailable)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body, &body); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	assertErrorCode(t, body, "AUTHENTICATION_UNCONFIGURED")
+}
+
 func TestEnrollmentShellDisablesCaching(t *testing.T) {
 	app := New(config.Config{
 		Environment: "test",
@@ -258,11 +301,7 @@ func TestEnrollmentShellDisablesCaching(t *testing.T) {
 }
 
 func TestIdempotencyKeyReplaysSameRequest(t *testing.T) {
-	app := New(config.Config{
-		Environment: "test",
-		ServiceName: "control-plane",
-		Version:     "test-version",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app := newTestApp()
 	headers := map[string]string{
 		"Authorization":   "Bearer test-token",
 		"Idempotency-Key": "idem_123",
@@ -286,11 +325,7 @@ func TestIdempotencyKeyReplaysSameRequest(t *testing.T) {
 }
 
 func TestIdempotencyKeyRejectsDifferentRequest(t *testing.T) {
-	app := New(config.Config{
-		Environment: "test",
-		ServiceName: "control-plane",
-		Version:     "test-version",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app := newTestApp()
 	headers := map[string]string{
 		"Authorization":   "Bearer test-token",
 		"Idempotency-Key": "idem_123",
@@ -310,11 +345,7 @@ func TestIdempotencyKeyRejectsDifferentRequest(t *testing.T) {
 }
 
 func TestIdempotencyKeyRequiredForApprovedMutation(t *testing.T) {
-	app := New(config.Config{
-		Environment: "test",
-		ServiceName: "control-plane",
-		Version:     "test-version",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app := newTestApp()
 
 	response := app.Serve(http.MethodPost, "/api/v1/sites/site_123/device-claim-invites", map[string]string{"Authorization": "Bearer test-token"}, nil)
 	if response.StatusCode != http.StatusBadRequest {
@@ -328,11 +359,7 @@ func TestIdempotencyKeyRequiredForApprovedMutation(t *testing.T) {
 }
 
 func TestRateLimitReturnsRetryAfter(t *testing.T) {
-	app := New(config.Config{
-		Environment: "test",
-		ServiceName: "control-plane",
-		Version:     "test-version",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app := newTestApp()
 	app.rateLimiter = newRateLimiter(1, time.Minute)
 
 	headers := map[string]string{"Authorization": "Bearer test-token"}

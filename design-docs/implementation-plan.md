@@ -506,10 +506,12 @@ Acceptance:
 
 ### M2.2 AuthN Adapter
 
-Status: implemented as an interface/fake seam. `backend/internal/platform/authn`
-parses bearer credentials, verifies through an adapter interface, and maps
-Cognito subjects to local `users` through `AuthRepository`. Live Cognito JWKS
-configuration remains an environment/provider wiring step.
+Status: implemented as an interface/fake seam and wired into the control-plane
+route shell. `backend/internal/platform/authn` parses bearer credentials,
+verifies through an adapter interface, maps Cognito subjects to local `users`
+through `AuthRepository`, and protected public routes fail closed when human
+authentication is not configured. Live Cognito JWKS configuration remains an
+environment/provider wiring step.
 
 Scope:
 
