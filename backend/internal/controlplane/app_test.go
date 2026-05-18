@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
@@ -254,6 +255,119 @@ func TestEnrollmentShellDisablesCaching(t *testing.T) {
 	if response.Headers["Cache-Control"] != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", response.Headers["Cache-Control"])
 	}
+}
+
+func TestIdempotencyKeyReplaysSameRequest(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	headers := map[string]string{
+		"Authorization":   "Bearer test-token",
+		"Idempotency-Key": "idem_123",
+	}
+
+	first := app.Serve(http.MethodPost, "/api/v1/sites/site_123/device-claim-invites", headers, []byte(`{"recipient_email":"person@example.com"}`))
+	second := app.Serve(http.MethodPost, "/api/v1/sites/site_123/device-claim-invites", headers, []byte(`{"recipient_email":"person@example.com"}`))
+
+	if first.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("first status = %d, want %d", first.StatusCode, http.StatusNotImplemented)
+	}
+	if second.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("second status = %d, want %d", second.StatusCode, http.StatusNotImplemented)
+	}
+	if second.Headers["X-HomeSignal-Idempotency-Replayed"] != "true" {
+		t.Fatalf("replay header = %q, want true", second.Headers["X-HomeSignal-Idempotency-Replayed"])
+	}
+	if string(second.Body) != string(first.Body) {
+		t.Fatalf("replayed body differs\nfirst: %s\nsecond: %s", first.Body, second.Body)
+	}
+}
+
+func TestIdempotencyKeyRejectsDifferentRequest(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	headers := map[string]string{
+		"Authorization":   "Bearer test-token",
+		"Idempotency-Key": "idem_123",
+	}
+
+	_ = app.Serve(http.MethodPost, "/api/v1/sites/site_123/device-claim-invites", headers, []byte(`{"recipient_email":"person@example.com"}`))
+	response := app.Serve(http.MethodPost, "/api/v1/sites/site_123/device-claim-invites", headers, []byte(`{"recipient_email":"other@example.com"}`))
+
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusConflict)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body, &body); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	assertErrorCode(t, body, "IDEMPOTENCY_KEY_REUSED")
+}
+
+func TestIdempotencyKeyRequiredForApprovedMutation(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	response := app.Serve(http.MethodPost, "/api/v1/sites/site_123/device-claim-invites", map[string]string{"Authorization": "Bearer test-token"}, nil)
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadRequest)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body, &body); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	assertErrorCode(t, body, "IDEMPOTENCY_KEY_REQUIRED")
+}
+
+func TestRateLimitReturnsRetryAfter(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app.rateLimiter = newRateLimiter(1, time.Minute)
+
+	headers := map[string]string{"Authorization": "Bearer test-token"}
+	_ = app.Serve(http.MethodGet, "/api/v1/dashboard", headers, nil)
+	response := app.Serve(http.MethodGet, "/api/v1/dashboard", headers, nil)
+
+	if response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusTooManyRequests)
+	}
+	if response.Headers["Retry-After"] == "" {
+		t.Fatalf("missing Retry-After header")
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body, &body); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	assertErrorCode(t, body, "RATE_LIMITED")
+}
+
+func TestInternalRouteRejectsUnknownServicePrincipal(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	response := app.Serve(http.MethodPost, "/internal/alert-candidates", map[string]string{"X-HomeSignal-Service-Principal": "service:unknown"}, nil)
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusUnauthorized)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body, &body); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	assertErrorCode(t, body, "SERVICE_AUTHENTICATION_REQUIRED")
 }
 
 func assertErrorCode(t *testing.T, body map[string]any, want string) {

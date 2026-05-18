@@ -1,18 +1,24 @@
 package controlplane
 
 import (
+	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/api"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/authn"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
 
 type App struct {
-	cfg    config.Config
-	logger *slog.Logger
+	cfg                  config.Config
+	logger               *slog.Logger
+	idempotency          *idempotencyStore
+	rateLimiter          *rateLimiter
+	serviceAuthenticator authn.ServiceAuthenticator
 }
 
 type Response struct {
@@ -26,8 +32,11 @@ func New(cfg config.Config, logger *slog.Logger) *App {
 		logger = slog.Default()
 	}
 	return &App{
-		cfg:    cfg,
-		logger: logger,
+		cfg:                  cfg,
+		logger:               logger,
+		idempotency:          newIdempotencyStore(10 * time.Minute),
+		rateLimiter:          newRateLimiter(600, time.Minute),
+		serviceAuthenticator: authn.DefaultStaticServiceAuthenticator(),
 	}
 }
 
@@ -35,15 +44,15 @@ func (a *App) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		requestContext := api.NewRequestContext(r)
-
-		response := a.ServeWithContext(requestContext, r.Method, r.URL.Path, firstHeaderValues(r.Header), nil)
-		for key, value := range response.Headers {
-			w.Header().Set(key, value)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			response := errorResponse(requestContext, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Request body could not be read.")
+			writeResponse(w, requestContext, response)
+			return
 		}
-		w.Header().Set(api.RequestIDHeader, requestContext.RequestID)
-		w.Header().Set(api.CorrelationIDHeader, requestContext.CorrelationID)
-		w.WriteHeader(response.StatusCode)
-		_, _ = w.Write(response.Body)
+
+		response := a.ServeWithContext(requestContext, r.Method, r.URL.Path, firstHeaderValues(r.Header), body)
+		writeResponse(w, requestContext, response)
 
 		a.logger.Info(
 			"request completed",
@@ -62,7 +71,7 @@ func (a *App) Serve(method string, path string, headers map[string]string, body 
 	return a.ServeWithContext(api.NewSyntheticRequestContext(), method, path, headers, body)
 }
 
-func (a *App) ServeWithContext(requestContext api.RequestContext, method string, path string, headers map[string]string, _ []byte) Response {
+func (a *App) ServeWithContext(requestContext api.RequestContext, method string, path string, headers map[string]string, body []byte) Response {
 	if route, ok := operationalRoutes(method, path); ok {
 		requestContext.RouteTemplate = route
 		return a.handleOperationalRoute(requestContext, path)
@@ -72,7 +81,7 @@ func (a *App) ServeWithContext(requestContext api.RequestContext, method string,
 	}
 
 	if strings.HasPrefix(path, "/api/v1") {
-		return a.handlePublicAPIRoute(requestContext, method, path, headers)
+		return a.handlePublicAPIRoute(requestContext, method, path, headers, body)
 	}
 	if strings.HasPrefix(path, "/agent") {
 		return a.handleAgentRoute(requestContext, method, path, headers)
@@ -116,7 +125,7 @@ func (a *App) handleOperationalRoute(_ api.RequestContext, path string) Response
 	}
 }
 
-func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method string, path string, headers map[string]string) Response {
+func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method string, path string, headers map[string]string, body []byte) Response {
 	route, ok, pathMatched := findPublicRoute(method, path)
 	if !ok {
 		if pathMatched {
@@ -130,12 +139,29 @@ func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method str
 		return errorResponse(requestContext, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication required.")
 	}
 
-	response := errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
-	response.Headers["X-HomeSignal-Operation-ID"] = route.OperationID
-	if route.Auth == publicAuthEnrollment {
-		response.Headers["Cache-Control"] = "no-store"
+	produce := func() Response {
+		if ok, retryAfter := a.allowRoute(requestContext, route.Pattern); !ok {
+			return rateLimitedResponse(requestContext, retryAfter)
+		}
+
+		response := errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
+		response.Headers["X-HomeSignal-Operation-ID"] = route.OperationID
+		if route.Auth == publicAuthEnrollment {
+			response.Headers["Cache-Control"] = "no-store"
+		}
+		return response
 	}
-	return response
+
+	if route.RequiresIdempotency {
+		key := strings.TrimSpace(headerValue(headers, "Idempotency-Key"))
+		if key == "" {
+			return errorResponse(requestContext, http.StatusBadRequest, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key header is required.")
+		}
+		scope := route.Pattern + "|" + rateLimitSubject(requestContext)
+		return a.idempotency.getOrStore(requestContext, scope, key, requestHash(method, path, body), produce)
+	}
+
+	return produce()
 }
 
 func (a *App) handleAgentRoute(requestContext api.RequestContext, method string, path string, headers map[string]string) Response {
@@ -164,10 +190,16 @@ func (a *App) handleInternalRoute(requestContext api.RequestContext, method stri
 	}
 	requestContext.RouteTemplate = route.Pattern
 
-	if strings.TrimSpace(headerValue(headers, "X-HomeSignal-Service-Principal")) == "" {
+	serviceSubject, err := a.serviceAuthenticator.AuthenticateService(context.Background(), headerValue(headers, "X-HomeSignal-Service-Principal"))
+	if err != nil {
 		return errorResponse(requestContext, http.StatusUnauthorized, "SERVICE_AUTHENTICATION_REQUIRED", "Service authentication is required.")
 	}
-	return errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
+	if ok, retryAfter := a.allowRoute(requestContext, route.Pattern+"|"+serviceSubject.ID); !ok {
+		return rateLimitedResponse(requestContext, retryAfter)
+	}
+	response := errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
+	response.Headers["X-HomeSignal-Service-Subject"] = serviceSubject.ID
+	return response
 }
 
 func operationalRoutes(method string, path string) (string, bool) {
@@ -205,6 +237,30 @@ func headerValue(headers map[string]string, name string) string {
 		}
 	}
 	return ""
+}
+
+func (a *App) allowRoute(requestContext api.RequestContext, routePattern string) (bool, int) {
+	if a.rateLimiter == nil {
+		return true, 0
+	}
+	return a.rateLimiter.allow(routePattern + "|" + rateLimitSubject(requestContext))
+}
+
+func rateLimitSubject(requestContext api.RequestContext) string {
+	if requestContext.SourceIP != "" {
+		return requestContext.SourceIP
+	}
+	return "synthetic"
+}
+
+func writeResponse(w http.ResponseWriter, requestContext api.RequestContext, response Response) {
+	for key, value := range response.Headers {
+		w.Header().Set(key, value)
+	}
+	w.Header().Set(api.RequestIDHeader, requestContext.RequestID)
+	w.Header().Set(api.CorrelationIDHeader, requestContext.CorrelationID)
+	w.WriteHeader(response.StatusCode)
+	_, _ = w.Write(response.Body)
 }
 
 func errorResponse(requestContext api.RequestContext, status int, code string, message string) Response {

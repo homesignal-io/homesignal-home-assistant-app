@@ -577,6 +577,11 @@ Acceptance:
 
 ### M2.5 Idempotency And Rate Limit Skeleton
 
+Status: implemented as a first in-memory API facade guardrail.
+Retry-prone public mutation shells now enforce `Idempotency-Key`, replay
+same-request duplicates, reject changed-body key reuse, and return
+`RATE_LIMITED` with `Retry-After` from route buckets.
+
 Scope:
 
 - Idempotency key middleware for approved methods/routes.
@@ -592,6 +597,11 @@ Acceptance:
 - In-memory is acceptable before a load balancer/multi-instance topology.
 
 ### M2.6 Internal Service Identity
+
+Status: implemented as a local/dev static service-principal adapter.
+`/internal/*` shells reject browser/user auth and unknown service principals;
+known service callers map to HomeSignal service subjects until the IAM/SigV4
+verifier is wired.
 
 Scope:
 

@@ -13,10 +13,11 @@ const (
 )
 
 type publicRouteSpec struct {
-	Method      string
-	Pattern     string
-	OperationID string
-	Auth        publicAuthBoundary
+	Method              string
+	Pattern             string
+	OperationID         string
+	Auth                publicAuthBoundary
+	RequiresIdempotency bool
 }
 
 type routeSpec struct {
@@ -30,9 +31,9 @@ var publicRouteSpecs = []publicRouteSpec{
 	{Method: http.MethodGet, Pattern: "/api/v1/activity", OperationID: "listActivity", Auth: publicAuthHuman},
 	{Method: http.MethodGet, Pattern: "/api/v1/alerts", OperationID: "listAlerts", Auth: publicAuthHuman},
 	{Method: http.MethodGet, Pattern: "/api/v1/alert-recipients", OperationID: "listAlertRecipients", Auth: publicAuthHuman},
-	{Method: http.MethodPost, Pattern: "/api/v1/sites/{site_id}/device-claim-invites", OperationID: "createDeviceClaimInvite", Auth: publicAuthHuman},
+	{Method: http.MethodPost, Pattern: "/api/v1/sites/{site_id}/device-claim-invites", OperationID: "createDeviceClaimInvite", Auth: publicAuthHuman, RequiresIdempotency: true},
 	{Method: http.MethodPost, Pattern: "/api/v1/device-enrollment/claim-invites/verify", OperationID: "verifyClaimInvite", Auth: publicAuthEnrollment},
-	{Method: http.MethodPost, Pattern: "/api/v1/device-enrollment/claim-verifications/{claim_verification_id}/confirm", OperationID: "confirmClaimVerification", Auth: publicAuthEnrollment},
+	{Method: http.MethodPost, Pattern: "/api/v1/device-enrollment/claim-verifications/{claim_verification_id}/confirm", OperationID: "confirmClaimVerification", Auth: publicAuthEnrollment, RequiresIdempotency: true},
 }
 
 var agentRouteSpecs = []routeSpec{
