@@ -1575,6 +1575,11 @@ Acceptance:
 
 ### M10.4 Home Assistant Version Catalog
 
+Status: implemented as a domain/platform seam. A cached latest stable Home
+Assistant Core catalog, GitHub release provider adapter, and portal-oriented
+device advisory read model now exist; stale, missing, unavailable, or ambiguous
+catalog data hides the advisory.
+
 Scope:
 
 - Add a small adapter/cache for latest stable Home Assistant Core version.
