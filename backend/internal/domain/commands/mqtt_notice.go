@@ -200,6 +200,7 @@ func (p CommandNoticePublisher) maxPayloadBytes() int {
 }
 
 var forbiddenPayloadKeys = map[string]bool{
+	"commandid":      true,
 	"password":       true,
 	"privatekey":     true,
 	"privatekeypem":  true,

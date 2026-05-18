@@ -1298,6 +1298,13 @@ Acceptance:
 
 ### M8.3 Notification Path
 
+Status: first payload/adapter seam implemented. `DeviceNotificationPublisher`
+publishes fire-and-forget QoS 1 hints to
+`homesignal/devices/{device_id}/notifications`, starts with the
+`publish_policy_changed` allowlist, and has fixture-backed tests proving the
+path does not require command repository state. A real AWS IoT Data Plane
+adapter and app subscription smoke remain follow-up work.
+
 Scope:
 
 - Fire-and-forget notification publisher for hints.
