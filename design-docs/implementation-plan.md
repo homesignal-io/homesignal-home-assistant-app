@@ -1509,6 +1509,10 @@ Read first:
 
 ### M10.1 Release Catalog
 
+Status: implemented as a domain/migration slice. Release channels, immutable
+release artifact metadata, and compatibility windows now exist in code and SQL;
+live CI publication into the catalog remains a later deployment integration.
+
 Scope:
 
 - Add `release_channels` and `release_artifacts` migrations.
