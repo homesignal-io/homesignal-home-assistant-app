@@ -44,6 +44,7 @@ scripts/deploy.sh staging
 scripts/smoke.sh staging
 scripts/logs.sh staging
 scripts/logs.sh staging telemetry-ingest
+scripts/bootstrap-staging-portal-user.sh staging <email>
 ```
 
 The portal uses contract fixtures unless `VITE_HOMESIGNAL_API_BASE_URL` is set

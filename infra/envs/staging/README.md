@@ -82,7 +82,8 @@ The staging Terraform now owns the Cognito user pool, portal app client, hosted
 UI domain prefix, control-plane Cognito env vars, and local-dev CORS origins.
 After deploy, create portal users through Cognito and seed matching local
 `users.cognito_sub` records before expecting authenticated `/api/v1/*` reads to
-return data.
+return data. Use `scripts/bootstrap-staging-portal-user.sh staging <email>` for
+that first-user bootstrap.
 
 To run those fixture steps manually:
 
