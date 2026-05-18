@@ -1357,6 +1357,13 @@ Read first:
 
 ### M9.1 Artifact Broker Core
 
+Status: first broker core implemented. Migration `000004_artifact_uploads`
+adds upload slot metadata, and `backend/internal/domain/artifacts` provides an
+allowlisted purpose registry, server-generated object keys, default TTL/size
+guardrails, content-type validation, and a fake signed URL issuer seam without
+persisting the signed URL. Completion validation and real object storage
+signing remain M9.2 follow-up work.
+
 Scope:
 
 - Add `artifact_uploads` migration.
