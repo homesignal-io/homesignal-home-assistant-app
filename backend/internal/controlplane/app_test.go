@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -16,12 +17,12 @@ import (
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
 
-func newTestApp() *App {
+func newTestApp(options ...Option) *App {
 	app := New(config.Config{
 		Environment: "test",
 		ServiceName: "control-plane",
 		Version:     "test-version",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), options...)
 	verifier := authn.NewFakeVerifier()
 	verifier.Tokens["test-token"] = authn.Claims{Subject: "cognito-sub", Email: "person@example.com", TokenUse: "access"}
 	users := ports.NewFakeAuthRepository()
@@ -284,6 +285,39 @@ func TestPublicHumanRouteFailsClosedWhenAuthUnconfigured(t *testing.T) {
 	assertErrorCode(t, body, "AUTHENTICATION_UNCONFIGURED")
 }
 
+func TestPublicReadModelRoutesCanServeConfiguredProvider(t *testing.T) {
+	app := newTestApp(WithPublicReadModels(fakePublicReadModels{}))
+
+	tests := []struct {
+		name         string
+		path         string
+		wantTopLevel string
+	}{
+		{name: "dashboard", path: "/api/v1/dashboard", wantTopLevel: "dashboard_state"},
+		{name: "devices", path: "/api/v1/devices", wantTopLevel: "devices"},
+		{name: "activity", path: "/api/v1/activity", wantTopLevel: "activity"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := app.Serve(http.MethodGet, tt.path, map[string]string{"Authorization": "Bearer test-token"}, nil)
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body: %s", response.StatusCode, http.StatusOK, response.Body)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(response.Body, &body); err != nil {
+				t.Fatalf("decode response body: %v", err)
+			}
+			if got := body["schema_version"]; got != float64(1) {
+				t.Fatalf("schema_version = %v, want 1", got)
+			}
+			if _, ok := body[tt.wantTopLevel]; !ok {
+				t.Fatalf("missing top-level field %q in %#v", tt.wantTopLevel, body)
+			}
+		})
+	}
+}
+
 func TestEnrollmentShellDisablesCaching(t *testing.T) {
 	app := New(config.Config{
 		Environment: "test",
@@ -409,4 +443,40 @@ func assertErrorCode(t *testing.T, body map[string]any, want string) {
 	if errorBody["request_id"] == "" {
 		t.Fatalf("missing request_id in error envelope: %#v", errorBody)
 	}
+}
+
+type fakePublicReadModels struct{}
+
+func (fakePublicReadModels) Dashboard(_ context.Context, subject authn.Subject) (any, error) {
+	return map[string]any{
+		"schema_version":  1,
+		"dashboard_state": "ok",
+		"subject_id":      string(subject.ID),
+		"summary": map[string]any{
+			"managed_sites":              0,
+			"managed_devices":            0,
+			"online_devices":             0,
+			"sites_needing_review":       0,
+			"open_issue_count":           0,
+			"backup_issue_count":         0,
+			"app_update_attention_count": 0,
+			"email_alerts_status":        "not_configured",
+		},
+		"managed_home_assistants": []any{},
+		"activity":                []any{},
+	}, nil
+}
+
+func (fakePublicReadModels) Devices(_ context.Context, _ authn.Subject) (any, error) {
+	return map[string]any{
+		"schema_version": 1,
+		"devices":        []any{},
+	}, nil
+}
+
+func (fakePublicReadModels) Activity(_ context.Context, _ authn.Subject) (any, error) {
+	return map[string]any{
+		"schema_version": 1,
+		"activity":       []any{},
+	}, nil
 }

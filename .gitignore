@@ -5,6 +5,8 @@ backend/dist/
 telemetry-ingest/dist/
 design-mock/dist/
 design-mock/node_modules/
+portal/dist/
+portal/node_modules/
 infra/**/.terraform/
 infra/**/*.tfstate
 infra/**/*.tfstate.*

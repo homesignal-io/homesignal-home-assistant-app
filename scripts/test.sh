@@ -25,4 +25,18 @@ for module in "${MODULES[@]}"; do
   fi
 done
 
+if [[ -f "$ROOT/portal/package.json" ]]; then
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "Missing required command: npm" >&2
+    echo "Install Node.js/npm, then rerun scripts/test.sh." >&2
+    exit 127
+  fi
+
+  echo "Testing portal"
+  (
+    cd "$ROOT/portal"
+    npm test
+  )
+fi
+
 echo "Tests passed"

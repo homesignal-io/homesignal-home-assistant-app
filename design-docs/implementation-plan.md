@@ -1720,9 +1720,11 @@ Read first:
 
 ### M12.0 Portal Read Model Contracts
 
-Status: first contract fixtures added. `testdata/contracts/api/public-v1`
+Status: contract fixtures added and the control-plane has an injectable public
+read-model route seam for dashboard, devices, and activity. `testdata/contracts/api/public-v1`
 contains dashboard, devices, and activity read-model examples; backend tests
-guard issue projection consistency and public activity filtering.
+guard issue projection consistency, public activity filtering, and route-level
+serving when a provider is configured.
 
 Scope:
 
@@ -1755,6 +1757,10 @@ Acceptance:
 
 ### M12.1 Promote Mock To Portal App
 
+Status: initial portal app added under `portal/`. The design mock remains under
+`design-mock/` for product review, while `portal/` is the implementation target
+and reads the public V0 contract fixtures by default.
+
 Scope:
 
 - Create `portal/` from the design mock or intentionally rename
@@ -1772,6 +1778,9 @@ Acceptance:
 - Portal skeleton can become real UI without rewriting mock intent.
 
 ### M12.2 Devices Fleet View
+
+Status: first portal fleet view implemented against the public device read-model
+fixtures with shared managed Home Assistant rows across Dashboard and Devices.
 
 Scope:
 
@@ -1793,6 +1802,9 @@ Acceptance:
 
 ### M12.3 Device Detail View
 
+Status: first portal detail view implemented against the public device read
+model, keeping IDs in an advanced section rather than as primary labels.
+
 Scope:
 
 - Reported state.
@@ -1809,6 +1821,9 @@ Acceptance:
 - IDs/Thing names are not primary customer-facing labels.
 
 ### M12.4 Enrollment Flow
+
+Status: first portal shell added with code entry and confirm review state;
+backend route wiring remains pending.
 
 Scope:
 
@@ -1828,6 +1843,10 @@ Acceptance:
 - User understands what site/environment is being paired.
 
 ### M12.5 Alerts UI
+
+Status: first portal alert center added with open issue projection and local
+recipient/subscription interaction; backend recipient route wiring remains
+pending.
 
 Scope:
 

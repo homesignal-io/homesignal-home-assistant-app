@@ -21,6 +21,7 @@ type App struct {
 	rateLimiter          *rateLimiter
 	serviceAuthenticator authn.ServiceAuthenticator
 	humanAuthenticator   humanAuthenticator
+	publicReadModels     PublicReadModelProvider
 }
 
 type Response struct {
@@ -33,17 +34,31 @@ type humanAuthenticator interface {
 	Authenticate(ctx context.Context, authorizationHeader string) (authn.Subject, error)
 }
 
-func New(cfg config.Config, logger *slog.Logger) *App {
+type Option func(*App)
+
+func WithPublicReadModels(provider PublicReadModelProvider) Option {
+	return func(app *App) {
+		app.publicReadModels = provider
+	}
+}
+
+func New(cfg config.Config, logger *slog.Logger, options ...Option) *App {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &App{
+	app := &App{
 		cfg:                  cfg,
 		logger:               logger,
 		idempotency:          newIdempotencyStore(10 * time.Minute),
 		rateLimiter:          newRateLimiter(600, time.Minute),
 		serviceAuthenticator: authn.DefaultStaticServiceAuthenticator(),
 	}
+	for _, option := range options {
+		if option != nil {
+			option(app)
+		}
+	}
+	return app
 }
 
 func (a *App) Handler() http.Handler {
@@ -144,8 +159,10 @@ func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method str
 	if route.Auth == publicAuthHuman && strings.TrimSpace(headerValue(headers, "Authorization")) == "" {
 		return errorResponse(requestContext, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication required.")
 	}
+	var subject authn.Subject
 	if route.Auth == publicAuthHuman {
-		subject, response, ok := a.authenticateHuman(requestContext, headers)
+		var response Response
+		subject, response, ok = a.authenticateHuman(requestContext, headers)
 		if !ok {
 			return response
 		}
@@ -157,6 +174,10 @@ func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method str
 	produce := func() Response {
 		if ok, retryAfter := a.allowRoute(requestContext, route.Pattern); !ok {
 			return rateLimitedResponse(requestContext, retryAfter)
+		}
+
+		if response, ok := a.handlePublicReadModelRoute(requestContext, route, subject); ok {
+			return response
 		}
 
 		response := errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
@@ -177,6 +198,31 @@ func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method str
 	}
 
 	return produce()
+}
+
+func (a *App) handlePublicReadModelRoute(requestContext api.RequestContext, route publicRouteSpec, subject authn.Subject) (Response, bool) {
+	if a.publicReadModels == nil || route.Method != http.MethodGet {
+		return Response{}, false
+	}
+
+	var (
+		payload any
+		err     error
+	)
+	switch route.OperationID {
+	case "getDashboard":
+		payload, err = a.publicReadModels.Dashboard(context.Background(), subject)
+	case "listDevices":
+		payload, err = a.publicReadModels.Devices(context.Background(), subject)
+	case "listActivity":
+		payload, err = a.publicReadModels.Activity(context.Background(), subject)
+	default:
+		return Response{}, false
+	}
+	if err != nil {
+		return errorResponse(requestContext, http.StatusInternalServerError, "READ_MODEL_UNAVAILABLE", "Read model is unavailable."), true
+	}
+	return jsonResponse(http.StatusOK, payload), true
 }
 
 func (a *App) authenticateHuman(requestContext api.RequestContext, headers map[string]string) (authn.Subject, Response, bool) {
@@ -250,7 +296,7 @@ func operationalPathExists(path string) bool {
 	}
 }
 
-func jsonResponse(status int, body map[string]any) Response {
+func jsonResponse(status int, body any) Response {
 	statusCode, headers, payload := api.JSONResponse(status, body)
 	return Response{
 		StatusCode: statusCode,

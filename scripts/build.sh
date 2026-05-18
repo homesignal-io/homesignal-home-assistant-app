@@ -6,6 +6,7 @@ BACKEND_DIR="$ROOT/backend"
 DIST_DIR="$BACKEND_DIR/dist/control-plane"
 TELEMETRY_DIR="$ROOT/telemetry-ingest"
 TELEMETRY_DIST_DIR="$TELEMETRY_DIR/dist"
+PORTAL_DIR="$ROOT/portal"
 
 require_command() {
   local command_name="$1"
@@ -57,8 +58,24 @@ echo "Building telemetry-ingest linux/arm64 container binary"
   GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-X main.version=$VERSION -X main.commit=$VERSION" -o "$TELEMETRY_DIST_DIR/telemetry-ingest-linux-arm64" ./cmd/telemetry-ingest
 )
 
+if [[ -f "$PORTAL_DIR/package.json" ]]; then
+  require_command npm
+
+  echo "Building portal"
+  (
+    cd "$PORTAL_DIR"
+    if [[ ! -d node_modules ]]; then
+      npm ci --ignore-scripts
+    fi
+    npm run build
+  )
+fi
+
 echo "Build complete"
 echo "  local:  $DIST_DIR/control-plane"
 echo "  lambda: $DIST_DIR/bootstrap.zip"
 echo "  telemetry local:     $TELEMETRY_DIST_DIR/telemetry-ingest"
 echo "  telemetry container: $TELEMETRY_DIST_DIR/telemetry-ingest-linux-arm64"
+if [[ -f "$PORTAL_DIR/package.json" ]]; then
+  echo "  portal:              $PORTAL_DIR/dist"
+fi

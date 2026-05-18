@@ -23,6 +23,8 @@ The first deployable backend slices are:
 - Go control-plane skeleton in `backend/`, deployed through Lambda/API Gateway.
 - Go telemetry-ingest skeleton in `telemetry-ingest/`, deployed as one small
   ECS/Fargate task with in-memory dedupe for unchanged telemetry.
+- React portal skeleton in `portal/`, built from the public read-model contract
+  fixtures and ready to swap from fixtures to `/api/v1` routes.
 
 The control plane exposes only operational endpoints:
 
@@ -37,6 +39,7 @@ The script entry points are:
 ```bash
 scripts/test.sh
 scripts/build.sh
+cd portal && npm ci && npm run dev
 scripts/deploy.sh staging
 scripts/smoke.sh staging
 scripts/logs.sh staging
