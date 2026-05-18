@@ -82,6 +82,9 @@ resource "aws_lambda_function" "control_plane" {
       HOMESIGNAL_ENV                = local.environment
       HOMESIGNAL_AWS_REGION         = var.aws_region
       HOMESIGNAL_DATABASE_SECRET_ID = aws_secretsmanager_secret.database_url.arn
+      HOMESIGNAL_COGNITO_CLIENT_ID  = aws_cognito_user_pool_client.portal.id
+      HOMESIGNAL_COGNITO_ISSUER     = local.cognito_issuer
+      HOMESIGNAL_COGNITO_TOKEN_USE  = "access"
       HOMESIGNAL_SERVICE_NAME       = "control-plane"
       HOMESIGNAL_VERSION            = var.artifact_version
       HOMESIGNAL_ARTIFACT_BUCKET    = aws_s3_bucket.artifacts.bucket
@@ -102,6 +105,23 @@ resource "aws_lambda_function" "control_plane" {
 resource "aws_apigatewayv2_api" "public" {
   name          = "${local.resource_prefix}-public-api"
   protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_headers = [
+      "Authorization",
+      "Content-Type",
+      "Idempotency-Key",
+      "X-Correlation-ID",
+    ]
+    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_origins = var.public_api_cors_allowed_origins
+    expose_headers = [
+      "X-Correlation-ID",
+      "X-HomeSignal-Idempotency-Replayed",
+      "X-Request-ID",
+    ]
+    max_age = 300
+  }
 }
 
 resource "aws_apigatewayv2_integration" "control_plane" {

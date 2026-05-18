@@ -44,6 +44,45 @@ variable "owner_tag" {
   default     = "platform"
 }
 
+variable "cognito_domain_prefix" {
+  description = "Optional Cognito hosted UI domain prefix. Defaults to the staging resource prefix plus AWS account ID."
+  type        = string
+  default     = ""
+}
+
+variable "portal_callback_urls" {
+  description = "Allowed OAuth callback URLs for the staging portal client."
+  type        = list(string)
+  default = [
+    "http://127.0.0.1:4178/",
+    "http://127.0.0.1:5173/",
+    "http://localhost:4178/",
+    "http://localhost:5173/",
+  ]
+}
+
+variable "portal_logout_urls" {
+  description = "Allowed OAuth logout URLs for the staging portal client."
+  type        = list(string)
+  default = [
+    "http://127.0.0.1:4178/",
+    "http://127.0.0.1:5173/",
+    "http://localhost:4178/",
+    "http://localhost:5173/",
+  ]
+}
+
+variable "public_api_cors_allowed_origins" {
+  description = "Browser origins allowed to call the staging public API."
+  type        = list(string)
+  default = [
+    "http://127.0.0.1:4178",
+    "http://127.0.0.1:5173",
+    "http://localhost:4178",
+    "http://localhost:5173",
+  ]
+}
+
 variable "artifact_version" {
   description = "Version string exposed by the control-plane /version endpoint."
   type        = string

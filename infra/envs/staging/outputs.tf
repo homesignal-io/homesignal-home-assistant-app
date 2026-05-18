@@ -87,3 +87,23 @@ output "database_region_parameter_name" {
   description = "SSM parameter that records the expected staging PostgreSQL region."
   value       = aws_ssm_parameter.database_region.name
 }
+
+output "cognito_user_pool_id" {
+  description = "Cognito user pool ID for staging human portal/API authentication."
+  value       = aws_cognito_user_pool.portal_users.id
+}
+
+output "cognito_user_pool_client_id" {
+  description = "Cognito app client ID for staging portal authentication."
+  value       = aws_cognito_user_pool_client.portal.id
+}
+
+output "cognito_issuer" {
+  description = "Cognito JWT issuer expected by the control-plane runtime."
+  value       = local.cognito_issuer
+}
+
+output "cognito_hosted_ui_domain" {
+  description = "Cognito hosted UI domain prefix for staging portal authentication."
+  value       = aws_cognito_user_pool_domain.portal.domain
+}

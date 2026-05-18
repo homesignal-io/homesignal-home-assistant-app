@@ -78,6 +78,12 @@ ready, configure the control-plane runtime with `HOMESIGNAL_COGNITO_ISSUER`,
 (`access` by default). The runtime maps verified Cognito subjects to local
 Postgres `users.cognito_sub` values before authorization.
 
+The staging Terraform now owns the Cognito user pool, portal app client, hosted
+UI domain prefix, control-plane Cognito env vars, and local-dev CORS origins.
+After deploy, create portal users through Cognito and seed matching local
+`users.cognito_sub` records before expecting authenticated `/api/v1/*` reads to
+return data.
+
 To run those fixture steps manually:
 
 ```bash
