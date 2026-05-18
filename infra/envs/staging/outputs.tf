@@ -23,6 +23,16 @@ output "staging_base_url" {
   value       = aws_apigatewayv2_api.public.api_endpoint
 }
 
+output "artifact_bucket_name" {
+  description = "Private S3 bucket for staging brokered artifacts."
+  value       = aws_s3_bucket.artifacts.bucket
+}
+
+output "artifact_bucket_arn" {
+  description = "ARN of the private S3 bucket for staging brokered artifacts."
+  value       = aws_s3_bucket.artifacts.arn
+}
+
 output "telemetry_ingest_ecr_repository_url" {
   description = "ECR repository URL for telemetry-ingest images."
   value       = aws_ecr_repository.telemetry_ingest.repository_url

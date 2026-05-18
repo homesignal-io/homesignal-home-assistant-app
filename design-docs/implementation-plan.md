@@ -1386,6 +1386,14 @@ Acceptance:
 
 ### M9.2 S3/Object Storage Adapter
 
+Status: first staging resource and presign seam implemented. Staging IaC now
+creates a private encrypted/versioned S3 artifact bucket, blocks public access,
+grants the control-plane runtime scoped object permissions, and exposes the
+bucket name to the control plane. `backend/internal/platform/objectstore`
+provides a mocked S3 PUT presign adapter with TTL, method, HTTPS, object-key,
+content-type, and checksum assertions. Real AWS SDK wiring and upload
+completion validation remain follow-up work.
+
 Scope:
 
 - Pre-signed upload URLs.

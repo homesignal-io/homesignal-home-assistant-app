@@ -61,10 +61,11 @@ resource "aws_lambda_function" "control_plane" {
 
   environment {
     variables = {
-      HOMESIGNAL_ENV          = local.environment
-      HOMESIGNAL_AWS_REGION   = var.aws_region
-      HOMESIGNAL_SERVICE_NAME = "control-plane"
-      HOMESIGNAL_VERSION      = var.artifact_version
+      HOMESIGNAL_ENV             = local.environment
+      HOMESIGNAL_AWS_REGION      = var.aws_region
+      HOMESIGNAL_SERVICE_NAME    = "control-plane"
+      HOMESIGNAL_VERSION         = var.artifact_version
+      HOMESIGNAL_ARTIFACT_BUCKET = aws_s3_bucket.artifacts.bucket
     }
   }
 
