@@ -66,7 +66,8 @@ scripts/smoke.sh staging
 ```
 
 The smoke script creates and cleans a non-customer `dev_smoke-*` fixture device
-around the telemetry checks. To run those fixture steps manually:
+plus fixture certificate credential around the telemetry checks. To run those
+fixture steps manually:
 
 ```bash
 scripts/staging-fixtures.sh staging seed-telemetry-device <dev_smoke-...>

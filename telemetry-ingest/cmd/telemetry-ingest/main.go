@@ -26,6 +26,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	var writer pipeline.PersistenceWriter = &pipeline.MemoryWriter{}
 	var failures pipeline.FailureSink = &pipeline.MemoryFailureSink{}
+	var authorityResolver pipeline.DeviceAuthorityResolver
 	if databaseURL := firstNonEmpty(os.Getenv("HOMESIGNAL_DATABASE_URL"), os.Getenv("DATABASE_URL")); databaseURL != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		pool, err := postgres.Open(ctx, databaseURL)
@@ -38,12 +39,15 @@ func main() {
 		postgresWriter := postgres.Writer{Pool: pool}
 		writer = postgresWriter
 		failures = postgresWriter
+		authorityResolver = postgresWriter
 		logger.Info("postgres telemetry persistence enabled")
 	} else {
 		logger.Info("memory telemetry persistence enabled")
 	}
+	runtimePipeline := pipeline.NewRuntimePipeline(writer, failures)
+	runtimePipeline.AuthorityResolver = authorityResolver
 	handler := app.NewHandler(app.Server{
-		Pipeline: pipeline.NewRuntimePipeline(writer, failures),
+		Pipeline: runtimePipeline,
 		Version:  version,
 		Commit:   commit,
 	})

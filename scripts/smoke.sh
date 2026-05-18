@@ -151,11 +151,9 @@ echo "Checking telemetry-ingest accepts first health snapshot"
 FIRST_RESPONSE="$(
   curl -fsS \
     -H "Content-Type: application/json" \
-    -H "X-HomeSignal-Device-ID: $SMOKE_DEVICE_ID" \
-    -H "X-HomeSignal-Site-ID: site_01J00000000000000000000000" \
-    -H "X-HomeSignal-Org-ID: org_01J00000000000000000000000" \
     -H "X-Client-Cert-Fingerprint: SHA256:fixture" \
     -H "X-Client-Cert-Serial: 01J00000000000000000000000" \
+    -H "X-Client-Cert-Issuer: CN=HomeSignal Staging Fixture CA" \
     --data-binary @"$FIRST_FIXTURE" \
     "$TELEMETRY_URL/agent/telemetry"
 )"
@@ -168,11 +166,9 @@ echo "Checking telemetry-ingest suppresses unchanged health snapshot"
 SECOND_RESPONSE="$(
   curl -fsS \
     -H "Content-Type: application/json" \
-    -H "X-HomeSignal-Device-ID: $SMOKE_DEVICE_ID" \
-    -H "X-HomeSignal-Site-ID: site_01J00000000000000000000000" \
-    -H "X-HomeSignal-Org-ID: org_01J00000000000000000000000" \
     -H "X-Client-Cert-Fingerprint: SHA256:fixture" \
     -H "X-Client-Cert-Serial: 01J00000000000000000000000" \
+    -H "X-Client-Cert-Issuer: CN=HomeSignal Staging Fixture CA" \
     --data-binary @"$SECOND_FIXTURE" \
     "$TELEMETRY_URL/agent/telemetry"
 )"

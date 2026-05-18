@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,6 +168,91 @@ func TestRuntimePipelineWritesMaterialChange(t *testing.T) {
 	}
 }
 
+func TestRuntimePipelineResolvesAuthorityFromTransportCredential(t *testing.T) {
+	writer := &MemoryWriter{}
+	runtimePipeline := NewRuntimePipeline(writer, &MemoryFailureSink{})
+	runtimePipeline.AuthorityResolver = &fakeAuthorityResolver{device: testDeviceContext()}
+
+	result, err := runtimePipeline.Ingest(context.Background(), IngestRequest{
+		Route: RouteTelemetry,
+		Device: AuthenticatedDeviceContext{
+			DeviceID:               "dev_untrusted_header",
+			CertificateFingerprint: "SHA256:fixture",
+			CertificateSerial:      "01J00000000000000000000000",
+		},
+		Credential: TransportCredential{
+			CertificateFingerprint: "SHA256:fixture",
+			CertificateSerial:      "01J00000000000000000000000",
+		},
+		Body: readContractFixture(t, "agent_https_telemetry_device_health_snapshot_v1_valid.json"),
+	})
+	if err != nil {
+		t.Fatalf("ingest with resolved authority: %v", err)
+	}
+	if !result.Accepted || writer.Count() != 1 {
+		t.Fatalf("expected one accepted write, result=%#v writes=%d", result, writer.Count())
+	}
+	if got := writer.Messages[0].Device.DeviceID; got != testDeviceContext().DeviceID {
+		t.Fatalf("write used device %q, want resolved device %q", got, testDeviceContext().DeviceID)
+	}
+}
+
+func TestRuntimePipelineRejectsUnknownTransportCredential(t *testing.T) {
+	writer := &MemoryWriter{}
+	failures := &MemoryFailureSink{}
+	runtimePipeline := NewRuntimePipeline(writer, failures)
+	runtimePipeline.AuthorityResolver = &fakeAuthorityResolver{err: fmt.Errorf("%w: unknown credential", ErrIdentityDrift)}
+
+	_, err := runtimePipeline.Ingest(context.Background(), IngestRequest{
+		Route: RouteTelemetry,
+		Credential: TransportCredential{
+			CertificateFingerprint: "SHA256:unknown",
+			CertificateSerial:      "01J00000000000000000000000",
+		},
+		Body: readContractFixture(t, "agent_https_telemetry_device_health_snapshot_v1_valid.json"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "identity_drift") {
+		t.Fatalf("expected identity drift error, got %v", err)
+	}
+	if writer.Count() != 0 {
+		t.Fatalf("expected no writes, got %d", writer.Count())
+	}
+	if failures.Count() != 1 || failures.Failures[0].Stage != "authority" || failures.Failures[0].Reason != "identity_drift" {
+		t.Fatalf("expected identity drift failure, got %#v", failures.Failures)
+	}
+}
+
+func TestRuntimePipelineRejectsPayloadDeviceIdentityDrift(t *testing.T) {
+	writer := &MemoryWriter{}
+	failures := &MemoryFailureSink{}
+	runtimePipeline := NewRuntimePipeline(writer, failures)
+	runtimePipeline.AuthorityResolver = &fakeAuthorityResolver{device: testDeviceContext()}
+	payload := bytes.Replace(
+		readContractFixture(t, "agent_https_telemetry_device_health_snapshot_v1_valid.json"),
+		[]byte(`"payload": {`),
+		[]byte(`"payload": {"device": {"homesignal_device_id": "dev_wrong"},`),
+		1,
+	)
+
+	_, err := runtimePipeline.Ingest(context.Background(), IngestRequest{
+		Route: RouteTelemetry,
+		Credential: TransportCredential{
+			CertificateFingerprint: "SHA256:fixture",
+			CertificateSerial:      "01J00000000000000000000000",
+		},
+		Body: payload,
+	})
+	if err == nil || !strings.Contains(err.Error(), "identity_drift") {
+		t.Fatalf("expected identity drift error, got %v", err)
+	}
+	if writer.Count() != 0 {
+		t.Fatalf("expected no writes, got %d", writer.Count())
+	}
+	if failures.Count() != 1 || failures.Failures[0].Stage != "authority" {
+		t.Fatalf("expected authority failure, got %#v", failures.Failures)
+	}
+}
+
 func TestRuntimePipelineRejectsUnsupportedSchemaWithoutWriting(t *testing.T) {
 	writer := &MemoryWriter{}
 	failures := &MemoryFailureSink{}
@@ -283,4 +369,16 @@ func testDeviceContext() AuthenticatedDeviceContext {
 		CertificateFingerprint: "SHA256:fixture",
 		CertificateSerial:      "01J00000000000000000000000",
 	}
+}
+
+type fakeAuthorityResolver struct {
+	device AuthenticatedDeviceContext
+	err    error
+}
+
+func (r *fakeAuthorityResolver) ResolveDevice(_ context.Context, _ TransportCredential) (AuthenticatedDeviceContext, error) {
+	if r.err != nil {
+		return AuthenticatedDeviceContext{}, r.err
+	}
+	return r.device, nil
 }

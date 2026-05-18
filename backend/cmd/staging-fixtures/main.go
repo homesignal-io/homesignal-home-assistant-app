@@ -13,8 +13,11 @@ import (
 )
 
 const (
-	smokeAccountID = "acct_staging_smoke"
-	smokeSiteID    = "site_staging_smoke"
+	smokeAccountID              = "acct_staging_smoke"
+	smokeSiteID                 = "site_staging_smoke"
+	smokeCertificateFingerprint = "SHA256:fixture"
+	smokeCertificateSerial      = "01J00000000000000000000000"
+	smokeCertificateIssuer      = "CN=HomeSignal Staging Fixture CA"
 )
 
 func main() {
@@ -104,6 +107,31 @@ ON CONFLICT (device_id) DO UPDATE SET
   updated_at = now()
 `, deviceID, smokeAccountID, smokeSiteID); err != nil {
 		return fmt.Errorf("upsert smoke device: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO device_credentials (
+  device_id,
+  certificate_fingerprint,
+  certificate_serial,
+  certificate_issuer,
+  status,
+  iot_thing_name,
+  credential_slot,
+  issued_at,
+  last_seen_at
+)
+VALUES ($1, $2, $3, $4, 'active', $1, 'primary', now(), now())
+ON CONFLICT (certificate_fingerprint) DO UPDATE SET
+  device_id = EXCLUDED.device_id,
+  certificate_serial = EXCLUDED.certificate_serial,
+  certificate_issuer = EXCLUDED.certificate_issuer,
+  status = 'active',
+  iot_thing_name = EXCLUDED.iot_thing_name,
+  credential_slot = EXCLUDED.credential_slot,
+  last_seen_at = now(),
+  updated_at = now()
+`, deviceID, smokeCertificateFingerprint, smokeCertificateSerial, smokeCertificateIssuer); err != nil {
+		return fmt.Errorf("upsert smoke credential: %w", err)
 	}
 	return nil
 }

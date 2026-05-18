@@ -70,7 +70,8 @@ points:
 - Operator-safe staging database secret helper:
   `scripts/set-staging-database-url.sh`
 - DB-backed staging smoke fixture helper:
-  `scripts/staging-fixtures.sh`
+  `scripts/staging-fixtures.sh`, including fixture device and active
+  certificate credential seeding
 - Database migration surface: `backend/migrations`, `backend/cmd/migrate`, and
   AWS secret metadata for `/homesignal/staging/platform/database_url`
 

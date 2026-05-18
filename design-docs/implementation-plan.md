@@ -1028,10 +1028,10 @@ Acceptance:
 Status: first staging path implemented. Telemetry Ingest now keeps the memory
 dedupe/coalescing path and can persist accepted material changes to Postgres
 when `HOMESIGNAL_DATABASE_URL` is injected. Staging smoke seeds a
-`dev_smoke-*` fixture device, verifies accepted plus unchanged-suppressed
-telemetry, then cleans the fixture. Full device-authority resolution remains
-M6.5/M5-dependent; current direct staging smoke still uses trusted fixture
-headers.
+`dev_smoke-*` fixture device plus active credential, verifies accepted plus
+unchanged-suppressed telemetry, then cleans the fixture. The direct staging
+smoke uses fixture certificate metadata and DB-backed credential resolution
+instead of trusting a mutable device header.
 
 Scope:
 
@@ -1055,6 +1055,12 @@ Acceptance:
   the cloud runtime preserves hot dedupe, coalescing, and batched writes.
 
 ### M6.5 Authority Resolution
+
+Status: first DB-backed path implemented for Agent HTTPS-shaped telemetry.
+Telemetry Ingest resolves certificate fingerprint/serial through
+`device_credentials`, requires an active claimed device, rejects unknown or
+revoked credentials, and rejects payload device ID mismatches as
+`identity_drift` before product-state writes.
 
 Scope:
 

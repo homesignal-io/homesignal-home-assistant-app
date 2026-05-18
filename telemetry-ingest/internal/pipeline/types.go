@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -27,6 +28,11 @@ const (
 	SchemaTypeAgentAlarm           = "agent_alarm"
 
 	RuntimeSchemaVersionV1 = 1
+)
+
+var (
+	ErrIdentityDrift              = errors.New("identity_drift")
+	ErrMissingTransportCredential = errors.New("missing_transport_credential")
 )
 
 type SchemaKey struct {
@@ -64,6 +70,7 @@ type AuthenticatedDeviceContext struct {
 type IngestRequest struct {
 	Route      RuntimeRoute
 	Device     AuthenticatedDeviceContext
+	Credential TransportCredential
 	Body       []byte
 	ReceivedAt time.Time
 }

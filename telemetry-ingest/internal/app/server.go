@@ -54,9 +54,10 @@ func runtimeHandler(runtimePipeline *pipeline.RuntimePipeline, route pipeline.Ru
 			return
 		}
 		result, err := runtimePipeline.Ingest(r.Context(), pipeline.IngestRequest{
-			Route:  route,
-			Device: deviceContextFromHeaders(r),
-			Body:   body,
+			Route:      route,
+			Device:     deviceContextFromHeaders(r),
+			Credential: credentialFromHeaders(r),
+			Body:       body,
 		})
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -73,6 +74,14 @@ func deviceContextFromHeaders(r *http.Request) pipeline.AuthenticatedDeviceConte
 		OrgID:                  r.Header.Get("X-HomeSignal-Org-ID"),
 		CertificateFingerprint: r.Header.Get("X-Client-Cert-Fingerprint"),
 		CertificateSerial:      r.Header.Get("X-Client-Cert-Serial"),
+	}
+}
+
+func credentialFromHeaders(r *http.Request) pipeline.TransportCredential {
+	return pipeline.TransportCredential{
+		CertificateFingerprint: r.Header.Get("X-Client-Cert-Fingerprint"),
+		CertificateSerial:      r.Header.Get("X-Client-Cert-Serial"),
+		CertificateIssuer:      r.Header.Get("X-Client-Cert-Issuer"),
 	}
 }
 

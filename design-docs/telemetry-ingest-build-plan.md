@@ -206,9 +206,10 @@ Implementation checkpoint, 2026-05-14:
   remediation hooks.
 - Phase 5 has a first Postgres writer path for accepted latest-state upserts,
   sparse event inserts, failure rows, and telemetry last-seen updates. The
-  current staging smoke seeds and cleans a `dev_smoke-*` device fixture before
-  posting telemetry so persistence is FK-backed. Full authority resolution and
-  production-grade backpressure remain later phases.
+  current staging smoke seeds and cleans a `dev_smoke-*` device plus active
+  credential fixture before posting telemetry so persistence and certificate
+  authority resolution are DB-backed. Production-grade backpressure remains a
+  later phase.
 
 ### Phase 1: Service Skeleton And Contract Example Tests
 
