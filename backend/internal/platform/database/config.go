@@ -15,6 +15,7 @@ const DriverName = "pgx"
 
 type Config struct {
 	URL             string
+	SecretID        string
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
@@ -23,6 +24,7 @@ type Config struct {
 func LoadConfigFromEnv() Config {
 	return Config{
 		URL:             firstNonEmpty(os.Getenv("HOMESIGNAL_DATABASE_URL"), os.Getenv("DATABASE_URL")),
+		SecretID:        os.Getenv("HOMESIGNAL_DATABASE_SECRET_ID"),
 		MaxOpenConns:    envInt("HOMESIGNAL_DATABASE_MAX_OPEN_CONNS", 5),
 		MaxIdleConns:    envInt("HOMESIGNAL_DATABASE_MAX_IDLE_CONNS", 2),
 		ConnMaxLifetime: envDuration("HOMESIGNAL_DATABASE_CONN_MAX_LIFETIME", 30*time.Minute),

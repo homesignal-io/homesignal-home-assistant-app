@@ -9,7 +9,8 @@ first AWS IoT Core routing resources:
   public `/api/v1/*` route family.
 - ECR repository and one ECS/Fargate `telemetry-ingest` task.
 - Secrets Manager injection of the staging database URL into telemetry-ingest
-  so accepted smoke telemetry can persist to Postgres.
+  and Secrets Manager runtime access for the control plane, without placing the
+  database URL in Terraform state.
 - Temporary direct staging HTTP access to telemetry-ingest on port `8080` for
   smoke tests until Agent HTTPS mTLS is wired.
 - AWS IoT device policy, Thing type, lifecycle topic rule, and lifecycle log

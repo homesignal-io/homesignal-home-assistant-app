@@ -46,6 +46,24 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy" "control_plane_database_secret" {
+  name = "${local.resource_prefix}-control-plane-database-secret"
+  role = aws_iam_role.control_plane_runtime.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.database_url.arn
+      }
+    ]
+  })
+}
+
 resource "aws_lambda_function" "control_plane" {
   function_name = "${local.resource_prefix}-control-plane-runtime"
   role          = aws_iam_role.control_plane_runtime.arn
@@ -61,11 +79,12 @@ resource "aws_lambda_function" "control_plane" {
 
   environment {
     variables = {
-      HOMESIGNAL_ENV             = local.environment
-      HOMESIGNAL_AWS_REGION      = var.aws_region
-      HOMESIGNAL_SERVICE_NAME    = "control-plane"
-      HOMESIGNAL_VERSION         = var.artifact_version
-      HOMESIGNAL_ARTIFACT_BUCKET = aws_s3_bucket.artifacts.bucket
+      HOMESIGNAL_ENV                = local.environment
+      HOMESIGNAL_AWS_REGION         = var.aws_region
+      HOMESIGNAL_DATABASE_SECRET_ID = aws_secretsmanager_secret.database_url.arn
+      HOMESIGNAL_SERVICE_NAME       = "control-plane"
+      HOMESIGNAL_VERSION            = var.artifact_version
+      HOMESIGNAL_ARTIFACT_BUCKET    = aws_s3_bucket.artifacts.bucket
     }
   }
 

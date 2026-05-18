@@ -1720,11 +1720,14 @@ Read first:
 
 ### M12.0 Portal Read Model Contracts
 
-Status: contract fixtures added and the control-plane has an injectable public
-read-model route seam for dashboard, devices, and activity. `testdata/contracts/api/public-v1`
-contains dashboard, devices, and activity read-model examples; backend tests
-guard issue projection consistency, public activity filtering, and route-level
-serving when a provider is configured.
+Status: contract fixtures added; the control-plane has an injectable public
+read-model route seam and a Postgres-backed provider for dashboard, devices,
+and activity. `testdata/contracts/api/public-v1` contains dashboard, devices,
+and activity read-model examples; backend tests guard issue projection
+consistency, public activity filtering, route-level serving when a provider is
+configured, and provider projection logic including the 48 hour app-update
+grace period. Staging control-plane runtime can resolve the existing database
+URL through Secrets Manager without putting the URL in Terraform state.
 
 Scope:
 

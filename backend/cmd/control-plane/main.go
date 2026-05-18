@@ -11,6 +11,9 @@ import (
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/controlplane"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/lambdaproxy"
 	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/database"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/readmodels"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/secrets"
 )
 
 var version = "dev"
@@ -29,7 +32,33 @@ func main() {
 		"aws_region", cfg.AWSRegion,
 	)
 
-	app := controlplane.New(cfg, logger)
+	options := []controlplane.Option{}
+	databaseConfig := database.LoadConfigFromEnv()
+	if databaseConfig.URL == "" && databaseConfig.SecretID != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		secretClient, err := secrets.NewSecretsManagerClient(ctx, cfg.AWSRegion)
+		if err == nil {
+			databaseConfig.URL, err = secrets.ReadString(ctx, secretClient, databaseConfig.SecretID)
+		}
+		cancel()
+		if err != nil {
+			logger.Error("resolve control-plane database secret", "error", err)
+			os.Exit(1)
+		}
+	}
+	if databaseConfig.URL != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		db, err := database.Open(ctx, databaseConfig)
+		cancel()
+		if err != nil {
+			logger.Error("open control-plane database", "error", err)
+			os.Exit(1)
+		}
+		defer db.Close()
+		options = append(options, controlplane.WithPublicReadModels(readmodels.Store{DB: db}))
+	}
+
+	app := controlplane.New(cfg, logger, options...)
 
 	if runtimeAPI := os.Getenv("AWS_LAMBDA_RUNTIME_API"); runtimeAPI != "" {
 		if err := lambdaproxy.Run(context.Background(), runtimeAPI, app, logger); err != nil {
