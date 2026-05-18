@@ -1102,6 +1102,12 @@ Acceptance:
 
 ### M6.7 Alert Candidate Sink
 
+Status: blocked from useful implementation until M11.1 provides a DB-backed
+Alerting candidate intake. The internal route shell exists, but Telemetry
+Ingest should not send candidates to a route that only returns
+`ROUTE_NOT_IMPLEMENTED` or pretend success without Alerting verifying current
+DB state.
+
 Scope:
 
 - Emit candidates after DB write.
@@ -1152,6 +1158,11 @@ Read first:
 - `aws-iot-routing-contract.md`
 
 ### M7.1 Publish Policy Domain
+
+Status: first database seed implemented. `publish_policy_catalog` stores the
+v0 default/free resolved policy values, event-family gates, freshness windows,
+and observability budget, with a migration audit row. Per-device policy
+resolution and edge projection remain M7 follow-up slices.
 
 Scope:
 
