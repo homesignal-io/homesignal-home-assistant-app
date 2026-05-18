@@ -1650,6 +1650,10 @@ Acceptance:
 
 ### M11.3 Alert Recipients And Preferences
 
+Status: implemented as a domain/migration slice. Email-scoped alert recipients,
+verified/pending/disabled/deleted status, optional site scope, and v0
+subscription-family eligibility are modeled; route wiring remains later.
+
 Scope:
 
 - Add `alert_recipients` migration.
