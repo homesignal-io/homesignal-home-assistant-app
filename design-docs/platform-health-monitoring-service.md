@@ -2,7 +2,7 @@
 
 This is a future logical service boundary for detecting unhealthy platform and cross-device behavior across HomeSignal. It is not part of v0.
 
-This does not mean v0 ignores device health. V0 should collect and show bounded device/add-on health through Telemetry Ingest, latest-state projections, and API reads. The future Platform Health / Monitoring service is for slower cross-service interpretation, correlation, suppression, and remediation recommendations.
+This does not mean v0 ignores device health. V0 should collect and show bounded device/app health through Telemetry Ingest, latest-state projections, and API reads. The future Platform Health / Monitoring service is for slower cross-service interpretation, correlation, suppression, and remediation recommendations.
 
 V0 platform-health posture:
 
@@ -83,7 +83,7 @@ Out of scope:
 - audit authority
 - device lifecycle mutation without an owning service
 - cloud authorization decisions
-- direct add-on command execution
+- direct app command execution
 
 ## Ownership
 
@@ -127,7 +127,7 @@ Candidate detection rules:
 - device sends disabled event categories, especially live `ha_event`, after policy refresh
 - device emits repeated malformed MQTT5 metadata or unsupported schema versions
 - device publishes with stale or unknown `applied_publish_policy_version` outside the convergence window
-- accepted-to-dropped ratio indicates local add-on enforcement is failing
+- accepted-to-dropped ratio indicates local app enforcement is failing
 - repeated reconnect/publish bursts suggest unstable or abusive runtime behavior
 - a single account/site shows correlated spikes across multiple devices
 

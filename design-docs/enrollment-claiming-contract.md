@@ -1,6 +1,6 @@
 # Enrollment And Claiming Contract
 
-This document defines the cloud contract expected by the HomeSignal Manager add-on enrollment implementation. It is not a SaaS implementation plan for this repository. The current repository implements the Home Assistant add-on side and mock-tested client interfaces only.
+This document defines the cloud contract expected by the HomeSignal Manager app enrollment implementation. It is not a SaaS implementation plan for this repository. The current repository implements the Home Assistant app side and mock-tested client interfaces only.
 
 Canonical device lifecycle, trust, and authority rules live in `workstreams/device-lifecycle.md`. This contract defines the enrollment/claiming phase of that lifecycle.
 
@@ -12,13 +12,13 @@ The HomeSignal backend is the source of truth for account, site, user, claim inv
 
 ## Actors
 
-- HomeSignal Manager add-on: installed on a Home Assistant site. It has a stable `installation_id` before claim.
+- HomeSignal Manager app: installed on a Home Assistant site. It has a stable `installation_id` before claim.
 - HomeSignal SaaS user: authenticated integrator user claiming a device to an account/site.
 - HomeSignal backend: business authority for claim authorization and audit.
 - AWS IoT Core: replaceable device credential signer/issuer and device transport endpoint.
 - AWS IoT provisioning adapter: HomeSignal infrastructure boundary that coordinates Thing creation/binding, IoT policy attachment, CSR signing, and AWS certificate references after HomeSignal authorizes the claim.
 
-## Add-On Local State
+## App Local State
 
 `/config/device.json` is metadata only:
 
@@ -39,7 +39,7 @@ The HomeSignal backend is the source of truth for account, site, user, claim inv
 }
 ```
 
-Secret material lives in separate `0600` files under add-on-owned `/config` subdirectories:
+Secret material lives in separate `0600` files under app-owned `/config` subdirectories:
 
 - `/config/secrets/claim_verification_token`
 - `/config/iot/device.key`
@@ -49,14 +49,14 @@ Temporary claim verification material must be removed after final provisioning s
 
 ## State Machine
 
-Allowed add-on states:
+Allowed app states:
 
 - `UNCLAIMED`: no durable HomeSignal-confirmed claim exists.
 - `PAIRING_PENDING`: a claim invite has been verified locally, claim confirmation is in progress, or AWS provisioning succeeded but HomeSignal has not confirmed finalization.
 - `CLAIMED`: HomeSignal confirmed the device, and local cert/key files exist.
 - `REVOKED`: HomeSignal reported the credential/device as revoked. Full release cleanup is future work.
 
-The add-on must never boot as `CLAIMED` merely because local cert/key files exist. HomeSignal-confirmed claimed metadata is required.
+The app must never boot as `CLAIMED` merely because local cert/key files exist. HomeSignal-confirmed claimed metadata is required.
 
 ## Cloud-Side Data Models
 
@@ -119,7 +119,7 @@ Rules:
 
 ### `device_claim_verifications`
 
-Created when the add-on presents a claim invite code to verify before local
+Created when the app presents a claim invite code to verify before local
 confirmation. Verification is a context/read step. It must not issue runtime
 credentials or finalize the claim.
 
@@ -147,7 +147,7 @@ Rules:
 
 - Claim verification token default expiry: 15 minutes.
 - Verification token is stored hashed server-side and returned only to the
-  add-on that requested verification.
+  app that requested verification.
 - Confirmation requires the same verification record, token, installation ID,
   claim invite, and presented details hash.
 - The raw claim code alone cannot confirm or finalize a claim.
@@ -219,11 +219,11 @@ Tracks AWS IoT credential metadata, not private key contents.
 
 Credential creation uses certificate signing, not HomeSignal key custody:
 
-- The add-on generates the private key locally.
-- The add-on sends a CSR through the claim flow.
+- The app generates the private key locally.
+- The app sends a CSR through the claim flow.
 - HomeSignal coordinates AWS IoT `CreateCertificateFromCsr`.
 - AWS IoT signs the CSR and returns `certificatePem`, `certificateId`, and `certificateArn`.
-- HomeSignal returns the certificate PEM to the add-on and stores the AWS certificate identifiers plus derived certificate metadata.
+- HomeSignal returns the certificate PEM to the app and stores the AWS certificate identifiers plus derived certificate metadata.
 - HomeSignal never receives or stores the device private key.
 - HomeSignal does not need to persist the full certificate PEM after claim; it stores computed identity fields for future `/agent/*` mTLS authorization.
 
@@ -254,17 +254,17 @@ Rules:
 
 ## Config Wipe And Re-Pairing
 
-If the user wipes add-on config, the add-on loses its cached claimed-device metadata and credential bundle.
+If the user wipes app config, the app loses its cached claimed-device metadata and credential bundle.
 
 Rules:
 
-- The add-on must return to `UNCLAIMED` behavior locally.
+- The app must return to `UNCLAIMED` behavior locally.
 - Cloud device state does not change to released merely because local config was wiped.
 - The prior cloud device may appear offline or unhealthy until repaired, released, revoked, or otherwise remediated.
-- The add-on must enroll again before claimed runtime operation.
+- The app must enroll again before claimed runtime operation.
 - Reusing a prior `device_id` requires explicit cloud-authorized repair/reconnect behavior.
 - Without explicit repair/reconnect, successful enrollment creates a new `device_id`.
-- A local Home Assistant administrator may intentionally reset HomeSignal local identity; this returns the add-on to unclaimed behavior but does not delete, transfer, or mutate prior cloud account records by itself.
+- A local Home Assistant administrator may intentionally reset HomeSignal local identity; this returns the app to unclaimed behavior but does not delete, transfer, or mutate prior cloud account records by itself.
 
 ## Recognition Signals
 
@@ -272,13 +272,13 @@ Enrollment may include bounded recognition signals so HomeSignal can identify po
 
 Initial candidate signals:
 
-- add-on `installation_id`, if present
+- app `installation_id`, if present
 - Home Assistant instance ID, if available
 - Supervisor or host installation/machine identifier, if available and appropriate
 - hostname
 - Home Assistant version
 - Supervisor version
-- add-on version
+- app version
 - operating system or environment type
 - CSR hash
 
@@ -291,7 +291,7 @@ Rules:
 
 ## Claim Context Resolution
 
-The add-on does not decide whether a recognized prior installation should repair/reconnect to an existing HomeSignal identity, transfer through an authorized product flow, or create a fresh claim. That decision happens in the authenticated web claim flow.
+The app does not decide whether a recognized prior installation should repair/reconnect to an existing HomeSignal identity, transfer through an authorized product flow, or create a fresh claim. That decision happens in the authenticated web claim flow.
 
 Flow:
 
@@ -300,12 +300,12 @@ SaaS user creates a site claim invite in the web portal
   -> API stores hashed GUID-style claim code with account/site/customer/creator context
   -> portal shows or emails the raw code once
 
-local add-on user enters claim code
-  -> add-on sends installation_id, ha_instance_uuid, machine_id, recognition_signals, agent_version, CSR hash
+local app user enters claim code
+  -> app sends installation_id, ha_instance_uuid, machine_id, recognition_signals, agent_version, CSR hash
   -> API validates invite, expiry, rate limits, and recognition context
   -> API returns integrator/site/customer/creator display details and a short verification token
-  -> local add-on UI presents details for confirmation
-  -> add-on confirms with the verification token and presented details hash
+  -> local app UI presents details for confirmation
+  -> app confirms with the verification token and presented details hash
   -> API finalizes the authorized action and returns claim credentials
 ```
 
@@ -321,7 +321,7 @@ Rules:
 - User-facing copy must not identify another account/integrator unless policy permits it.
 - Claim invite verification may identify only the account/site/customer/creator
   attached to the invite itself. It must not reveal unrelated prior-account
-  recognition matches to the local add-on UI.
+  recognition matches to the local app UI.
 
 ### `audit_events`
 
@@ -333,12 +333,12 @@ Required fields:
 - `account_id`
 - `site_id`
 - `device_id`, nullable until a device exists
-- `installation_id`, nullable until add-on verification
+- `installation_id`, nullable until app verification
 - `claim_invite_id`, when applicable
 - `claim_verification_id`, when applicable
 - `recipient_email_hash`, when applicable
-- `actor_user_id`, nullable for unauthenticated add-on verification attempts
-- `actor_kind`: `user`, `addon_preclaim`, `system`
+- `actor_user_id`, nullable for unauthenticated app verification attempts
+- `actor_kind`: `user`, `app_preclaim`, `system`
 - `action`: `claim_invite_created`, `claim_invite_email_send_attempted`, `claim_invite_cancelled`, `claim_invite_expired`, `device_claim_verification_attempted`, `device_claim_verification_succeeded`, `device_claim_verification_failed`, `device_claim_confirmation_attempted`, `device_claim_succeeded`, `device_claim_failed`, `aws_pre_provisioning_allowed`, `aws_pre_provisioning_denied`, `claim_finalization_conflict`
 - `result`: `success`, `failure`, `denied`
 - `reason`
@@ -413,7 +413,7 @@ Portal routes are authenticated and authorized against the site/account. They
 never return the raw claim code after creation. `replace` cancels the old invite
 and creates a new invite/code under the normal creation limits.
 
-Public/add-on error behavior:
+Public/app error behavior:
 
 | Situation | Public response |
 | --- | --- |
@@ -425,10 +425,10 @@ Public/add-on error behavior:
 | Same invite confirmed first by another verification | `CLAIM_INVITE_NOT_AVAILABLE` |
 
 Authenticated portal routes may show exact invite status to authorized users.
-Unauthenticated add-on routes should prefer the generic unavailable class so
+Unauthenticated app routes should prefer the generic unavailable class so
 public callers cannot enumerate which codes ever existed.
 
-### Add-on verifies a claim invite
+### App verifies a claim invite
 
 `POST /api/v1/device-enrollment/claim-invites/verify`
 
@@ -452,7 +452,7 @@ Request:
     "machine_id": "2f8f8c8e2c7f4f89a2a1f5a9e6d3b111",
     "home_assistant_version": "2026.5.0",
     "supervisor_version": "2026.05.0",
-    "addon_version": "0.1.2",
+    "ha_app_version": "0.1.2",
     "hostname": "homeassistant",
     "os_type": "Home Assistant OS"
   },
@@ -460,7 +460,7 @@ Request:
 }
 ```
 
-`ha_instance_uuid` is required when the add-on can retrieve it. `machine_id` is required when Supervisor exposes it. The request must still be accepted without one of these values only when the add-on cannot obtain it; missing recognition fields reduce repair/reconnect confidence and may force normal first-time pairing.
+`ha_instance_uuid` is required when the app can retrieve it. `machine_id` is required when Supervisor exposes it. The request must still be accepted without one of these values only when the app cannot obtain it; missing recognition fields reduce repair/reconnect confidence and may force normal first-time pairing.
 
 Backend validation:
 
@@ -525,7 +525,7 @@ Claim verification response rules:
 - Requesting verification must not issue runtime credentials or finalize the
   claim.
 
-### Add-on confirms a claim verification
+### App confirms a claim verification
 
 `POST /api/v1/device-enrollment/claim-verifications/{claim_verification_id}/confirm`
 
@@ -548,7 +548,7 @@ Request:
     "schema_version": 1,
     "policy_revision": 1,
     "authority_profile": "managed_admin",
-    "source": "local_addon_pairing",
+    "source": "local_ha_app_pairing",
     "selected_at": "2026-05-14T12:00:00Z",
     "permissions": [
       { "key": "ha_status_read", "enabled": true },
@@ -572,9 +572,9 @@ Backend validation:
 - CSR hash matches the hash presented during verification.
 - If the invite display snapshot hash no longer matches the verification's
   presented details hash, confirmation fails with `CLAIM_DETAILS_STALE` and the
-  add-on must verify again.
+  app must verify again.
 - AWS region, IoT endpoint, fleet/provisioning template, and policy attachment
-  are selected by backend configuration, not by add-on request fields.
+  are selected by backend configuration, not by app request fields.
 - Optional `local_management_policy` is stored as claim metadata and initial
   local policy context. It does not authorize the claim by itself.
 - Any recognized repair/reconnect/fresh-claim decision is allowed by account,
@@ -601,14 +601,14 @@ Response:
 }
 ```
 
-The add-on already generated and retained the private key locally before
+The app already generated and retained the private key locally before
 submitting the CSR. The certificate PEM is the signed public certificate and may
 be returned through the confirm response. HomeSignal must not return or store a
 device private key.
 
 ### HomeSignal provisions with AWS IoT Core
 
-The add-on submits a CSR through the HomeSignal claim verification confirmation
+The app submits a CSR through the HomeSignal claim verification confirmation
 flow. After local confirmation and backend authorization, HomeSignal coordinates
 AWS IoT `CreateCertificateFromCsr` through the provisioning adapter. AWS IoT
 signs the CSR and returns `certificatePem`, `certificateId`, and
@@ -633,12 +633,12 @@ If the provisioning adapter cannot validate the claim, it must deny certificate 
 `POST /api/v1/device-enrollment/claim-verifications/{claim_verification_id}/confirm`
 is the HomeSignal claim finalization endpoint for this flow.
 
-Confirmation must be idempotent by `Idempotency-Key`. If the add-on loses the
+Confirmation must be idempotent by `Idempotency-Key`. If the app loses the
 response before storing the certificate/config locally, it may retry the same
 confirmation while the verification token remains valid. HomeSignal returns the
 same successful response for the same idempotency scope.
 
-The add-on enters `CLAIMED` only after it has persisted the returned
+The app enters `CLAIMED` only after it has persisted the returned
 certificate/config and the confirm response has returned `status = claimed`. It
 must not report `CLAIMED` or start future IoT runtime messaging before that
 successful confirm response.
@@ -657,11 +657,11 @@ When a claim verification creates AWS material but HomeSignal cannot persist a m
 - Internal telemetry records why the claim was orphaned and whether cleanup was automatic.
 - Audit emits at least: `orphaned_credential_detected`, `orphaned_credential_reconciled`, `orphaned_credential_revoked`.
 
-### Future add-on checks device status
+### Future app checks device status
 
 `GET /api/v1/devices/{device_id}/status`
 
-This endpoint is intentionally out of v0 scope and not part of the enrollment/bootstrap API boundary. In v0, post-claim device calls must use approved mTLS `/agent/*` routes. Any later reintroduction of a public add-on status or revocation polling endpoint requires explicit definition of compatibility, security, rate-limits, and degraded-mode behavior before implementation.
+This endpoint is intentionally out of v0 scope and not part of the enrollment/bootstrap API boundary. In v0, post-claim device calls must use approved mTLS `/agent/*` routes. Any later reintroduction of a public app status or revocation polling endpoint requires explicit definition of compatibility, security, rate-limits, and degraded-mode behavior before implementation.
 
 Response:
 
@@ -678,7 +678,7 @@ Allowed statuses:
 - `UNKNOWN`
 - degraded/service-unavailable responses
 
-If the backend reports `REVOKED`, the add-on enters safe `REVOKED` state. Full release cleanup is future work. If the backend is unavailable, the add-on keeps local operation safe and reports a degraded cloud status.
+If the backend reports `REVOKED`, the app enters safe `REVOKED` state. Full release cleanup is future work. If the backend is unavailable, the app keeps local operation safe and reports a degraded cloud status.
 
 ## Claim Invite Lifecycle And Garbage Collection
 
@@ -830,12 +830,12 @@ Additional rules:
 User experience requirements:
 
 - The portal creation screen previews the exact integrator, creator, site,
-  customer, recipient, expiry, and support contact details that the add-on will
+  customer, recipient, expiry, and support contact details that the app will
   show during verification.
 - The create-success screen makes clear that the raw code is shown once. After
   navigation/refresh, the user can cancel or replace the invite, not reveal the
   old code.
-- The add-on verification screen shows the invite display details before the
+- The app verification screen shows the invite display details before the
   final confirm button. The confirm copy should tell the local admin to continue
   only if they expected that integrator/site/customer.
 - Expired, cancelled, already-used, and malformed code states should be
@@ -861,19 +861,19 @@ User experience requirements:
 - The raw claim code alone cannot confirm a claim; confirmation requires a prior
   verification token and matching presented details hash.
 - Claim/session material is short-lived and removed after use/expiry.
-- Device private keys are generated locally and never leave the add-on.
+- Device private keys are generated locally and never leave the app.
 - Real device certificate contents and private key contents are never exposed in `/status`, `/readyz`, `/ui`, browser storage, logs, or static docs.
-- HomeSignal final confirmation is required before the add-on can consider itself `CLAIMED`.
+- HomeSignal final confirmation is required before the app can consider itself `CLAIMED`.
 - A claimed device cannot be silently claimed again; any re-entry must go through authenticated web-flow repair/reconnect/fresh-claim handling.
 - First valid claim wins; races fail safely.
 - Single primary AWS IoT region is used for now. Multi-region failover and load sharing are out of scope.
 
-## Add-On Acceptance Expectations
+## App Acceptance Expectations
 
 - Legacy `device.json` with only `installation_id` migrates to schema v2.
 - Fresh install with reachable fake HomeSignal backend accepts a GUID-style claim invite code in `/ui`.
 - Valid claim invite verification displays integrator, creator, site, and customer details before confirmation.
-- Claim confirmation is impossible unless the add-on has first requested and accepted claim invite verification details.
+- Claim confirmation is impossible unless the app has first requested and accepted claim invite verification details.
 - `/status` exposes state and non-secret metadata only.
 - Pending claim verification survives restart until expiry.
 - Expired claim invites or verification tokens are not reused.

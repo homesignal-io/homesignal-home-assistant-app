@@ -17,6 +17,8 @@ operator to perform routine implementation work.
 - Durable AWS resource prefix: `homesignal-{environment}-...`
 - First deploy scope: low-cost control-plane skeleton, telemetry-ingest
   skeleton, IoT routing skeleton, and database migration plumbing
+- Domain posture: Stage 0 skeleton may use a generated AWS endpoint; Stage 1
+  browser/pairing staging requires a stable owned HTTPS domain
 
 ## Operator Tasks Before First Staging Deploy
 
@@ -43,7 +45,8 @@ account can own a budget.
 | Task | Needed before | Default/recommendation | Codex action once supplied |
 | --- | --- | --- | --- |
 | HomeSignal Neon project/database | Applying database migrations and wiring runtime persistence | Create a HomeSignal-owned Neon project/database in `us-east-1`; do not reuse the voice-extraction database | Store the plain PostgreSQL URL in `/homesignal/staging/platform/database_url`, run `scripts/migrate.sh staging up`, and keep app code provider-neutral |
-| Hosted zone and domain names | Custom DNS/API domains | Skip custom DNS for first deploy; use generated AWS endpoint | Add Route 53/ACM/API Gateway domain wiring when ready |
+| Hosted zone and domain names | Stage 1 public pairing, browser bridge, HA App staging profile, email links, and production DNS | Not required for Stage 0 skeleton smoke. Required before real staging pairing/browser-origin work. Use an owned root domain and create or delegate `staging.<root>` or equivalent. | Add Route 53/ACM/CloudFront/API Gateway domain wiring before enabling Stage 1 flows |
+| GitHub app distribution repos and image registry | Publishing Home Assistant app stable, candidate, and staging channels | Use one source repo and generated public distribution repos: stable, candidate, and staging. Candidate is production, not non-prod. | Create or verify repos/packages, configure CI publishing credentials, and generate track-specific app metadata |
 | Resend account and sender verification | Notification/email slice | Use Resend with sandbox/test recipient policy first | Wire `RESEND_API_KEY`, sender config, outbox processing, and test send smoke |
 | Production AWS account | Production deploy preparation | Separate production account before customer launch | Scaffold/verify production IaC without applying until approved |
 | Production budget threshold and alert target | First production deploy | Use a conservative temporary threshold such as `$100/month`, then revise before customer traffic | Configure production actual and forecasted spend alerts |

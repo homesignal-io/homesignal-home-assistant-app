@@ -12,7 +12,7 @@ architecture, the canonical docs win: `service-map.md`,
 
 System must use an outbound-only agent model.
 
-Home Assistant host runs HomeSignal Manager add-on.
+Home Assistant host runs HomeSignal Manager app.
 
 Claimed-device runtime uses AWS IoT Core for command notices, notifications,
 lifecycle presence, and compact edge state. Agent HTTPS with mTLS handles
@@ -56,8 +56,8 @@ Unclaimed devices must not receive operational commands.
 Claiming requires:
 valid site-bound claim invite
 logged-in authorized integrator
-local add-on verification of the claim invite details
-local add-on confirmation after verification
+local app verification of the claim invite details
+local app confirmation after verification
 device-reported unclaimed state
 
 Claim invites must expire.
@@ -107,7 +107,7 @@ backup policy
 telemetry interval
 enabled checks
 update policy
-managed add-ons
+managed apps
 remote access provider metadata
 
 Reported state examples:
@@ -216,7 +216,7 @@ apply template
 future local-supervisor stage update
 future local-supervisor execute update
 restore backup
-install managed add-on
+install managed app
 
 
 9. Security Posture
@@ -268,7 +268,7 @@ Lost credential recovery requires re-pairing.
 
 V0 credential direction:
 device-generated private key, CSR submitted through HomeSignal claim flow, AWS
-IoT-signed device certificate returned to the add-on, and mTLS Agent HTTPS
+IoT-signed device certificate returned to the app, and mTLS Agent HTTPS
 authorization by exact stored certificate fingerprint/serial.
 
 
@@ -346,9 +346,9 @@ HA Core update availability
 HAOS update availability
 Supervisor update availability
 agent update availability
-managed add-on update availability
+managed app update availability
 
-System must support HomeSignal add-on update intent/status policy:
+System must support HomeSignal app update intent/status policy:
 manual
 notify only
 approved window
@@ -356,8 +356,8 @@ blocked version
 staged rollout
 
 For v0, HomeSignal does not initiate Home Assistant, Supervisor, OS, database,
-or arbitrary host updates. HomeSignal add-on installation remains governed by
-the Home Assistant Supervisor/add-on release path and local policy.
+or arbitrary host updates. HomeSignal app installation remains governed by
+the Home Assistant Supervisor/app release path and local policy.
 
 
 15. Diagnostics
@@ -365,7 +365,7 @@ the Home Assistant Supervisor/add-on release path and local policy.
 Agent must collect safe diagnostic bundle:
 versions
 health summary
-logs from HomeSignal add-on
+logs from HomeSignal app
 Supervisor status
 recent command results
 backup status
@@ -465,7 +465,7 @@ command failed
 Product/customer alerting is not automatically implied by every candidate.
 For v0, Alerting Service owns customer-facing alert lifecycle for promoted
 product rules such as disconnected devices, backup failed/overdue, and
-add-on/update attention. Notification Service owns email delivery through the
+app/update attention. Notification Service owns email delivery through the
 provider adapter. Platform Health findings remain internal/support-only in v0
 unless a product alert rule explicitly promotes a condition. Product alerts
 support:
@@ -500,7 +500,7 @@ No customer LAN inventory scanning.
 
 Integrator can:
 create site
-install HomeSignal add-on
+install HomeSignal app
 claim HA device
 see online/offline status
 see basic HA health

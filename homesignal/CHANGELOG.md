@@ -14,7 +14,7 @@
 
 ## 0.1.0
 
-- Add initial local-build Home Assistant add-on skeleton.
+- Add initial local-build Home Assistant app skeleton.
 - Add Go agent with health, readiness, version, and UI placeholder routes.
 - Add persistent installation identity at `/config/device.json`.
 - Add optional `/data/options.json` parsing.

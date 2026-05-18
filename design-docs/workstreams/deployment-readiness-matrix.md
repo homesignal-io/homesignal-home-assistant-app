@@ -76,6 +76,11 @@ confirmed staging budget guardrail or alert email. Applying database migrations
 also requires a HomeSignal Neon database URL stored in the staging database
 secret or exported as `HOMESIGNAL_DATABASE_URL`.
 
+An owned domain is not a gate for the Stage 0 skeleton smoke deploy. It is a
+gate for Stage 1 staging flows that depend on browser origin trust, including
+public pairing pages, localStorage/postMessage bridge behavior, HA App staging
+environment profiles, claim UX, and email links.
+
 ## Environment Defaults
 
 Launch environments:
@@ -91,6 +96,22 @@ Environment posture:
 - If a personal or preview cloud environment is needed later, treat it as a
   temporary sandbox with an owner, TTL, cost limit, and cleanup path. It is not
   part of the launch environment model.
+
+Staging phase gates:
+
+| Phase | Endpoint posture | Allowed work |
+| --- | --- | --- |
+| Stage 0 skeleton smoke | Generated AWS endpoint allowed | Build/deploy/smoke scripts, IaC, logs, `/healthz`, `/readyz`, `/version`. |
+| Stage 1 domain-backed staging | Stable owned HTTPS domain required | Public pairing page, browser bridge, HA App staging profile, claim UX, email links, canary pairing, and human-visible staging workflows. |
+
+Default Stage 1 DNS shape:
+
+- Start with `staging.<owned-root-domain>` for the first public HomeSignal web
+  origin.
+- Split `app.staging.<root>` and `api.staging.<root>` only when routing,
+  cookie, or certificate boundaries need separate hostnames.
+- Generated AWS endpoints must not be stored in durable HA App environment
+  config.
 
 Account model:
 
@@ -219,6 +240,8 @@ These resources must be represented in IaC before production launch.
 | CodeBuild project: deploy staging | Script-driven staging deploy | staging |
 | CodeBuild project: deploy production | Script-driven production deploy after approval | production |
 | Artifact bucket or registry | Immutable service build artifacts | staging, production |
+| GHCR or equivalent app image registry | Home Assistant app images by stable/candidate/staging track | staging, production |
+| Public Home Assistant app distribution repos | Thin generated install channels for stable, candidate, and staging | staging, production |
 | IAM roles for CodeBuild/deploy | Least-privilege build/deploy authority | staging, production |
 | Optional thin GitHub Actions workflow | Trigger/report CodeBuild status | repo-level |
 
@@ -424,7 +447,7 @@ Simulator tests:
 
 Staging live tests:
 
-- claim a long-lived HA/add-on canary through staging AWS IoT
+- claim a long-lived HA/app canary through staging AWS IoT
 - publish Agent HTTPS telemetry through mTLS
 - process AWS IoT lifecycle presence
 - deliver one command and record ACK/result
@@ -531,7 +554,9 @@ be filled during implementation or operator setup. The canonical task list is
 - optional cost allocation tag values if required by the AWS account
 - explicit region override only if an operator rejects the selected `us-east-1`
   default before IaC is created
-- hosted zone and final domain names
+- hosted zone and final domain names before Stage 1 domain-backed staging
+- GitHub organization/repository and image registry access for generated Home
+  Assistant app distribution repos
 - Neon organization/project/database names
 - Resend account, verified sender domain, and test-recipient policy
 - production operator approval mechanism or ticketing location

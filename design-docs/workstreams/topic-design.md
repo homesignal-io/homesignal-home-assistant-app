@@ -94,9 +94,9 @@ Event publishing:
 
 - No broad `ha_event` stream in v0.
 - Device-originated events must be allowlisted by schema type.
-- Cloud provisions the local add-on publish budget.
-- The add-on enforces the last accepted budget hard.
-- The add-on reports `applied_publish_policy_version` with every claimed-device runtime publish.
+- Cloud provisions the local app publish budget.
+- The app enforces the last accepted budget hard.
+- The app reports `applied_publish_policy_version` with every claimed-device runtime publish.
 - Conservative defaults allow low-rate `device.health_snapshot` telemetry and strict-budget `agent_alarm`, while disabling live `ha_event`.
 - Cloud ingest enforces current server policy independently.
 - `refresh_publish_policy` may accelerate budget changes but is scoped to publish policy and is not required for cloud-side correctness.
@@ -110,7 +110,7 @@ Cloud-to-device publish-policy delivery:
 - Command ACK/results should return through the mTLS Agent HTTPS API unless the command spec later chooses another authenticated return path.
 - ACK means accepted/rejected within the command ACK window, not mere message receipt. See `command-lifecycle.md`.
 - Missing command ACK handling is product/operations policy, not topic semantics.
-- If publish-policy application fails, the add-on reports the bounded failure through shadow reported state or command result, depending on the path, and emits a bounded internal `agent_alarm`.
+- If publish-policy application fails, the app reports the bounded failure through shadow reported state or command result, depending on the path, and emits a bounded internal `agent_alarm`.
 - Error events may include a redacted diagnostic excerpt capped at 5 KB total.
 - If more local logs exist, the event should include `more_logs_available=true` plus a local correlation/reference ID.
 - Large logs beyond the 5 KB excerpt, raw policy blobs, signed URLs, secrets, and local file contents beyond the bounded redacted excerpt must not be sent over MQTT; use brokered diagnostic artifact upload when full detail is needed.

@@ -22,7 +22,7 @@ and stop without wandering. Each slice should have:
 
 The target product is the v0 architecture currently documented:
 
-- Home Assistant add-on exists locally and owns local identity, private key, and
+- Home Assistant app exists locally and owns local identity, private key, and
   bounded local behavior.
 - Control-plane API and logical domain services run as one v0 monolith.
 - Telemetry Ingest is separately deployable in v0.
@@ -52,7 +52,7 @@ slice until the owning doc is reconciled.
 
 ## Recommended Repo Shape
 
-The current repo already has the Home Assistant add-on under `homesignal/` and a
+The current repo already has the Home Assistant app under `homesignal/` and a
 React design mock under `design-mock/`. The cloud implementation does not exist
 yet.
 
@@ -96,7 +96,7 @@ testdata/contracts/
   shared contract examples used by more than one package
 ```
 
-Backend default: Go services, because the add-on is already Go, the deployment
+Backend default: Go services, because the app is already Go, the deployment
 shape favors small binaries, and the architecture relies on typed service
 contracts and adapters. Portal default: React/Vite, evolving from the current
 mock. IaC default: OpenTofu unless Terraform materially reduces v0 friction.
@@ -165,10 +165,10 @@ The plan is ordered by dependency, not by feature glamour.
 | M7 | Edge State Adapter and Publish Policy | Device policy convergence |
 | M8 | Command lifecycle and device notification path | Backup, diagnostics, update checks |
 | M9 | Backup, Artifact Broker, Diagnostics/debug | Offsite backups, support flows |
-| M10 | Release/update orchestration | Add-on version intent/status |
+| M10 | Release/update orchestration | App version intent/status |
 | M11 | Alerting and transactional email | Customer email alert surface |
 | M12 | Portal implementation and read models | Usable integrator and internal UI |
-| M13 | Add-on runtime expansion | Claimed runtime behavior |
+| M13 | App runtime expansion | Claimed runtime behavior |
 | M14 | Deployment, staging canary, production gates | Launch readiness |
 
 ## M0: Repo And Tooling Foundation
@@ -550,6 +550,11 @@ Acceptance:
 
 ### M2.4 API Facade Route Shell
 
+Status: implemented as route-family shell plus public OpenAPI guardrail.
+`backend/openapi/public-v1.yaml` owns public `/api/v1` operation IDs, and
+`backend/internal/controlplane` rejects route-family calls at the correct auth
+boundary before returning not-implemented stubs.
+
 Scope:
 
 - `/api/v1`
@@ -601,7 +606,7 @@ Tests:
 
 - Valid fake service principal maps to expected service subject.
 - Unknown service principal rejects.
-- Internal route cannot be called by browser/add-on auth.
+- Internal route cannot be called by browser/app auth.
 
 Acceptance:
 
@@ -644,14 +649,14 @@ Tests:
 
 Acceptance:
 
-- Web flow can express site-bound claim intent before the customer opens the add-on.
+- Web flow can express site-bound claim intent before the customer opens the app.
 
-### M3.2 Add-On Claim Invite Verification
+### M3.2 App Claim Invite Verification
 
 Scope:
 
 - `POST /api/v1/device-enrollment/claim-invites/verify`
-- Add-on submits claim code, installation ID, CSR hash, agent version, and recognition signals.
+- App submits claim code, installation ID, CSR hash, agent version, and recognition signals.
 - API validates invite state, expiry, creator authority, and rate limits.
 - API returns integrator, creator, site, and customer display details plus a short verification token.
 - API returns only generic unavailable errors for invalid, unknown, expired,
@@ -667,15 +672,15 @@ Tests:
 - Invalid/expired/cancelled/used invite returns stable errors without unrelated account/site data.
 - Verification token is stored hashed and never logged.
 - `claim_details_hash` covers the exact canonical display payload returned to
-  the add-on.
+  the app.
 - Recognition matches do not expose old-account details.
 - Repeated failures are rate-limited by source IP, installation ID, and claim code fingerprint.
 
 Acceptance:
 
-- Add-on can show "confirm this integrator/site/customer" before committing.
+- App can show "confirm this integrator/site/customer" before committing.
 
-### M3.3 Add-On Claim Confirmation With Fake Provisioner
+### M3.3 App Claim Confirmation With Fake Provisioner
 
 Scope:
 
@@ -685,20 +690,20 @@ Scope:
 - Confirm same verification, installation ID, CSR hash, and presented details hash.
 - Fail with `CLAIM_DETAILS_STALE` if the presented details hash no longer
   matches the invite/verification snapshot.
-- Backend selects AWS region/endpoint/template from configuration, not from add-on request fields.
+- Backend selects AWS region/endpoint/template from configuration, not from app request fields.
 - Accept optional initial `local_management_policy` metadata without treating it
   as claim authority.
 - Create `device_id`.
 - Set AWS IoT Thing name equal to `device_id`.
 - Store credential metadata including fingerprint/serial/issuer.
-- Return certificate PEM and IoT config to the add-on response.
+- Return certificate PEM and IoT config to the app response.
 - Route exists in OpenAPI before implementation.
 
 Tests:
 
 - Device and credential records created in one transaction when the fake provisioner succeeds.
 - Private key is never accepted or persisted.
-- Add-on-provided AWS region/endpoint/template fields are ignored or rejected.
+- App-provided AWS region/endpoint/template fields are ignored or rejected.
 - Failure leaves remediable state.
 - Expired or mismatched verification cannot confirm.
 - Duplicate/racing confirmation fails safely or returns the idempotent prior response.
@@ -707,7 +712,7 @@ Tests:
 
 Acceptance:
 
-- The add-on can complete a two-step verify/confirm claim without live AWS.
+- The app can complete a two-step verify/confirm claim without live AWS.
 
 ### M3.4 Claim Invite Guardrails And Audit
 
@@ -990,7 +995,7 @@ Acceptance:
 
 Scope:
 
-- Health, Home Assistant, add-on, backup summary, update summary, storage
+- Health, Home Assistant, app, backup summary, update summary, storage
   telemetry.
 - Agent alarm events.
 - Policy version validation hooks.
@@ -1162,11 +1167,11 @@ Acceptance:
 
 - No full shadow mirror in Postgres.
 
-### M7.4 Add-On Publish Policy Application
+### M7.4 App Publish Policy Application
 
 Scope:
 
-- Add-on stores last accepted policy.
+- App stores last accepted policy.
 - Enforces local budget hard.
 - Falls back conservative when missing/expired/invalid.
 - Reports applied version through shadow reported state.
@@ -1241,11 +1246,11 @@ Acceptance:
 
 - Notifications are never treated as proof of local state change.
 
-### M8.4 Add-On Command Receiver
+### M8.4 App Command Receiver
 
 Scope:
 
-- Add-on subscribes to command topic.
+- App subscribes to command topic.
 - Fetches command detail over mTLS Agent HTTPS.
 - ACKs accepted/rejected.
 - Rejects unknown or locally disallowed command types.
@@ -1265,7 +1270,7 @@ Acceptance:
 Read first:
 
 - `artifact-upload-broker.md`
-- `add-on-runtime-error-and-artifact-contract.md`
+- `app-runtime-error-and-artifact-contract.md`
 - `command-lifecycle.md`
 - `workstreams/local-cloud-trust-boundaries.md`
 - `workstreams/observability.md`
@@ -1308,7 +1313,7 @@ Tests:
 
 Acceptance:
 
-- No AWS credentials delivered to the add-on.
+- No AWS credentials delivered to the app.
 
 ### M9.3 Backup Service MVP
 
@@ -1355,7 +1360,7 @@ Acceptance:
 - Diagnostics owns request lifecycle and redaction policy; Artifact Broker owns
   temporary upload capability.
 
-### M9.5 Add-On Artifact Upload Handler
+### M9.5 App Artifact Upload Handler
 
 Scope:
 
@@ -1372,7 +1377,7 @@ Tests:
 
 Acceptance:
 
-- Add-on cannot be used as arbitrary file upload.
+- App cannot be used as arbitrary file upload.
 
 ## M10: Release And Update Orchestration
 
@@ -1406,7 +1411,7 @@ Acceptance:
 Scope:
 
 - Add `rollouts` and `device_update_assignments` migrations.
-- Assign desired add-on version/channel to device or cohort.
+- Assign desired app version/channel to device or cohort.
 - Write `homesignal_edge.update` desired through Edge State Adapter.
 - Do not deliver binaries over IoT.
 
@@ -1417,7 +1422,7 @@ Tests:
 
 Acceptance:
 
-- HomeSignal observes/converges update intent through Supervisor/add-on path.
+- HomeSignal observes/converges update intent through Supervisor/app path.
 
 ### M10.3 Update Status/Repair Command
 
@@ -1487,7 +1492,7 @@ Scope:
 
 - Add `alerts` and `alert_events` migrations.
 - Alert create/update/resolve/ack/snooze.
-- Initial families: disconnected device, backup failed, add-on/update attention.
+- Initial families: disconnected device, backup failed, app/update attention.
 
 Tests:
 
@@ -1508,7 +1513,7 @@ Scope:
 - Optional site scope.
 - Verification status: new recipients are pending until verified unless the
   address is the authenticated user's already-verified email.
-- V0 alert families: disconnected device, backup failed/overdue, and add-on
+- V0 alert families: disconnected device, backup failed/overdue, and app
   update attention.
 
 Tests:
@@ -1561,6 +1566,10 @@ Read first:
 
 ### M12.0 Portal Read Model Contracts
 
+Status: first contract fixtures added. `testdata/contracts/api/public-v1`
+contains dashboard, devices, and activity read-model examples; backend tests
+guard issue projection consistency and public activity filtering.
+
 Scope:
 
 - Add API facade read contracts/fixtures for `GET /api/v1/dashboard`,
@@ -1568,7 +1577,7 @@ Scope:
 - Centralize issue projection fields: issue code, severity, label, detail,
   source area, sort priority, and primary action.
 - V0 issue codes: disconnected device, backup failed, backup overdue,
-  add-on update attention after 48 hour grace period, Home Assistant update
+  app update attention after 48 hour grace period, Home Assistant update
   advisory, and storage warning when reported.
 - Centralize public activity feed fields: occurred time, category, action,
   subject, detail, severity, and actor label.
@@ -1697,18 +1706,18 @@ Acceptance:
 
 - Internal controls do not leak into integrator/customer UI.
 
-## M13: Add-On Runtime Expansion
+## M13: App Runtime Expansion
 
 Read first:
 
-- `add-on-skeleton.md`
-- `homesignal/design-docs/add-on-security.md`
+- `app-skeleton.md`
+- `homesignal/design-docs/app-security.md`
 - `enrollment-claiming-contract.md`
 - `workstreams/device-lifecycle.md`
-- `add-on-runtime-error-and-artifact-contract.md`
+- `app-runtime-error-and-artifact-contract.md`
 - `edge-state-adapter.md`
 
-The existing add-on already has local identity, enrollment state, CSR flow
+The existing app already has local identity, enrollment state, CSR flow
 pieces, local UI, and tests. Build on that rather than replacing it.
 
 ### M13.1 Recognition Signal Collection
@@ -1717,7 +1726,7 @@ Scope:
 
 - Home Assistant instance UUID when available.
 - Supervisor/machine ID when available and appropriate.
-- HA/Supervisor/add-on versions.
+- HA/Supervisor/app versions.
 - Hostname/environment facts.
 
 Tests:
@@ -1745,7 +1754,7 @@ Tests:
 
 Acceptance:
 
-- Claimed add-on can authenticate to Agent HTTPS.
+- Claimed app can authenticate to Agent HTTPS.
 
 ### M13.3 AWS IoT MQTT Client
 
@@ -1769,9 +1778,9 @@ Acceptance:
 Scope:
 
 - Hourly default `device.health_snapshot` telemetry.
-- Payload namespaces: `agent`, `home_assistant`, `addons`, and
+- Payload namespaces: `agent`, `home_assistant`, `ha_apps`, and
   `runtime_log_summary`.
-- HA Core version, Supervisor version, agent version, observed add-on inventory,
+- HA Core version, Supervisor version, agent version, observed app inventory,
   storage, backup/update summary when available.
 - Agent HTTPS publish with common envelope.
 
@@ -1779,7 +1788,7 @@ Tests:
 
 - Policy controls cadence and enabled categories.
 - Snapshot omits secrets and raw config.
-- Snapshot uses add-on arrays, not slug-keyed maps.
+- Snapshot uses app arrays, not slug-keyed maps.
 - Runtime log summary is collapsed and bounded, not a raw log stream.
 
 Acceptance:
@@ -1929,8 +1938,8 @@ Acceptance:
 
 Scope:
 
-- Long-lived real HA/add-on canary paired with staging AWS IoT.
-- Ephemeral HA/add-on lifecycle test harness.
+- Long-lived real HA/app canary paired with staging AWS IoT.
+- Ephemeral HA/app lifecycle test harness.
 - Simulator device for contract tests.
 
 Tests:
@@ -2015,7 +2024,7 @@ Local default tests:
 - Repository tests with disposable Postgres when available.
 - Contract fixture tests for enrollment, Agent HTTPS envelopes, command
   ACK/result, telemetry schemas, artifact upload, alert candidates.
-- Add-on tests with fake HomeSignal API, fake provisioner, fake MQTT, fake
+- App tests with fake HomeSignal API, fake provisioner, fake MQTT, fake
   Agent HTTPS.
 
 Integration tests:
@@ -2023,7 +2032,7 @@ Integration tests:
 - Mark live tests explicitly, for example with a build tag or `TestLive...`.
 - AWS IoT provisioning adapter live test only in staging.
 - API Gateway mTLS live test only in staging.
-- Staging canary tests for real HA/add-on pairing and telemetry.
+- Staging canary tests for real HA/app pairing and telemetry.
 
 Fixture naming:
 
@@ -2085,7 +2094,7 @@ email, or CI/CD slices are ready.
 14. Add claim-verification confirmation route with fake provisioner and
     fixtures.
 15. Add invite creation/verification/confirmation rate limits and audit rows.
-16. Add add-on local claim persistence for confirmed invite responses.
+16. Add app local claim persistence for confirmed invite responses.
 17. Add Device Registry credential lookup by fingerprint/serial.
 18. Add AWS IoT provisioner interface and mocked adapter tests.
 19. Add real AWS IoT provisioner adapter behind staging-only live tests.
@@ -2104,13 +2113,13 @@ email, or CI/CD slices are ready.
 31. Add free/default publish-policy seed records.
 32. Add Edge State Adapter interface and fake shadow adapter.
 33. Add Command Service core lifecycle and MQTT publisher adapter.
-34. Add add-on mTLS Agent HTTPS client.
-35. Add add-on MQTT command/shadow client skeleton.
-36. Add add-on telemetry snapshot publisher under publish policy.
+34. Add app mTLS Agent HTTPS client.
+35. Add app MQTT command/shadow client skeleton.
+36. Add app telemetry snapshot publisher under publish policy.
 37. Add Artifact Broker core with fake signed URL issuer.
 38. Add Backup Service trigger/status MVP.
 39. Add S3 signed URL adapter with mocked tests.
-40. Add add-on artifact upload handler.
+40. Add app artifact upload handler.
 41. Add Diagnostics/debug session and diagnostic bundle metadata MVP.
 42. Add Release/Update catalog and desired version assignment.
 43. Add Home Assistant version catalog/advisory adapter.
@@ -2126,7 +2135,7 @@ email, or CI/CD slices are ready.
 50. Add Secrets Manager/SSM path modules and DB credential rotation script.
 51. Add API Gateway mTLS staging path.
 52. Add CodeBuild test/build job.
-53. Pair staging canary HA/add-on with real staging IoT.
+53. Pair staging canary HA/app with real staging IoT.
 54. Add staging smoke: claim, telemetry, command ACK/result, alert email fake or
     sandbox provider.
 55. Add production deploy gate script with migration pre/post checks.

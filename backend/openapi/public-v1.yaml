@@ -1,0 +1,368 @@
+openapi: 3.1.0
+info:
+  title: HomeSignal Public API
+  version: 0.1.0
+  description: Public API scaffold for V0 route-first implementation.
+servers:
+  - url: https://api.homesignal.example/api/v1
+    description: Placeholder public API origin.
+tags:
+  - name: Portal Read Models
+  - name: Enrollment
+paths:
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [Portal Read Models]
+      summary: Get account dashboard read model
+      security:
+        - cognitoJwt: []
+      responses:
+        "200":
+          description: Dashboard read model.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /devices:
+    get:
+      operationId: listDevices
+      tags: [Portal Read Models]
+      summary: List managed Home Assistant device rows
+      security:
+        - cognitoJwt: []
+      responses:
+        "200":
+          description: Managed Home Assistant device rows.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevicesResponse"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [Portal Read Models]
+      summary: List user-visible activity rows
+      security:
+        - cognitoJwt: []
+      responses:
+        "200":
+          description: Public activity feed rows.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityResponse"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [Portal Read Models]
+      summary: List current alert rows
+      security:
+        - cognitoJwt: []
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /alert-recipients:
+    get:
+      operationId: listAlertRecipients
+      tags: [Portal Read Models]
+      summary: List alert recipient configuration rows
+      security:
+        - cognitoJwt: []
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /sites/{site_id}/device-claim-invites:
+    post:
+      operationId: createDeviceClaimInvite
+      tags: [Enrollment]
+      summary: Create a site-bound device pairing code
+      security:
+        - cognitoJwt: []
+      parameters:
+        - $ref: "#/components/parameters/SiteID"
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /device-enrollment/claim-invites/verify:
+    post:
+      operationId: verifyClaimInvite
+      tags: [Enrollment]
+      summary: Verify a pairing code from the Home Assistant app
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplementedNoStore"
+  /device-enrollment/claim-verifications/{claim_verification_id}/confirm:
+    post:
+      operationId: confirmClaimVerification
+      tags: [Enrollment]
+      summary: Confirm a verified pairing request from the Home Assistant app
+      parameters:
+        - $ref: "#/components/parameters/ClaimVerificationID"
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplementedNoStore"
+components:
+  securitySchemes:
+    cognitoJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    SiteID:
+      name: site_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^site_[A-Za-z0-9_]+$"
+    ClaimVerificationID:
+      name: claim_verification_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^clv_[A-Za-z0-9_]+$"
+  responses:
+    NotImplemented:
+      description: Route is reserved by the public API contract but not implemented yet.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotImplementedNoStore:
+      description: Enrollment route is reserved and must not be cached.
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+          description: Always `no-store`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    DashboardResponse:
+      type: object
+      required: [schema_version, dashboard_state, summary, managed_home_assistants, activity]
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        dashboard_state:
+          type: string
+          enum: [ok, action_required]
+        summary:
+          $ref: "#/components/schemas/DashboardSummary"
+        managed_home_assistants:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceReadModel"
+        activity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityRow"
+    DevicesResponse:
+      type: object
+      required: [schema_version, devices]
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceReadModel"
+    ActivityResponse:
+      type: object
+      required: [schema_version, activity]
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        activity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityRow"
+    DashboardSummary:
+      type: object
+      required:
+        - managed_sites
+        - managed_devices
+        - online_devices
+        - sites_needing_review
+        - open_issue_count
+        - backup_issue_count
+        - app_update_attention_count
+        - email_alerts_status
+      properties:
+        managed_sites:
+          type: integer
+        managed_devices:
+          type: integer
+        online_devices:
+          type: integer
+        sites_needing_review:
+          type: integer
+        open_issue_count:
+          type: integer
+        backup_issue_count:
+          type: integer
+        app_update_attention_count:
+          type: integer
+        email_alerts_status:
+          type: string
+          enum: [configured, not_configured, needs_attention]
+    DeviceReadModel:
+      type: object
+      required:
+        - site_id
+        - site_name
+        - customer_display_name
+        - compact_location
+        - device
+        - home_assistant
+        - supervisor
+        - ha_app
+        - backup
+        - storage
+        - primary_action
+        - issues
+      properties:
+        site_id:
+          type: string
+        site_name:
+          type: string
+        site_category:
+          type:
+            - string
+            - "null"
+        customer_display_name:
+          type: string
+        compact_location:
+          type: string
+        device:
+          type: object
+          required: [device_id, thing_name, presence, last_seen_at]
+          properties:
+            device_id:
+              type: string
+            thing_name:
+              type: string
+            presence:
+              type: string
+              enum: [online, degraded, disconnected]
+            last_seen_at:
+              type: string
+              format: date-time
+        home_assistant:
+          type: object
+          required: [installed_version, latest_version, latest_version_source]
+          properties:
+            installed_version:
+              type: string
+            latest_version:
+              type:
+                - string
+                - "null"
+            latest_version_source:
+              type: string
+              enum: [catalog, unavailable]
+        supervisor:
+          type: object
+          additionalProperties: true
+        ha_app:
+          type: object
+          additionalProperties: true
+        backup:
+          type: object
+          additionalProperties: true
+        storage:
+          type: object
+          additionalProperties: true
+        primary_action:
+          type: string
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/IssueProjection"
+    IssueProjection:
+      type: object
+      required: [issue_code, severity, label, detail, source_area, sort_priority, primary_action, site_id, device_id]
+      properties:
+        issue_code:
+          type: string
+          enum:
+            - device_disconnected
+            - backup_failed
+            - backup_overdue
+            - app_update_attention
+            - ha_update_advisory
+            - storage_warning
+        severity:
+          type: string
+          enum: [critical, warning, info]
+        label:
+          type: string
+        detail:
+          type: string
+        source_area:
+          type: string
+        sort_priority:
+          type: integer
+        primary_action:
+          type: string
+        site_id:
+          type: string
+        device_id:
+          type: string
+    ActivityRow:
+      type: object
+      required: [activity_id, occurred_at, category, action, subject_type, subject_id, subject_label, detail, severity, actor_label]
+      properties:
+        activity_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        category:
+          type: string
+          enum: [alert, backup, device, update, enrollment, account]
+        action:
+          type: string
+        subject_type:
+          type: string
+        subject_id:
+          type: string
+        subject_label:
+          type: string
+        detail:
+          type: string
+        severity:
+          type: string
+          enum: [critical, warning, info]
+        actor_label:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true

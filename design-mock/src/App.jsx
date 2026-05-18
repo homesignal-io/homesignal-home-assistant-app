@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { Fragment, createContext, useContext, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 /*
@@ -38,7 +38,7 @@ const navGroups = [
   },
   {
     title: "Internal",
-    items: ["Internal Admin", "Internal Diagnostics", "Internal Audit", "HA Add-on", "Schema Coverage"],
+    items: ["Internal Admin", "Internal Diagnostics", "Internal Audit", "HA App", "Schema Coverage"],
   },
 ];
 
@@ -46,7 +46,7 @@ const defaultRoute = {
   page: "Dashboard",
   site: "site_123",
   device: "dev_123",
-  addon: "onboarding",
+  haApp: "onboarding",
   wiring: "off",
 };
 
@@ -54,17 +54,19 @@ const DataWiringContext = createContext(false);
 
 const autoPairingStorageKey = "homesignal.auto_pairing";
 const homeAssistantUrlStorageKey = "homesignal.hass_url";
-const mockAddonPairingStateKey = "homesignal.mock_addon_pairing_state";
-const mockAddonBootstrapStateKey = "homesignal.mock_addon_bootstrap_state";
-const autoPairingBridgePath = "/addon_pairing?bridge=1";
+const mockHaAppPairingStateKey = "homesignal.mock_ha_app_pairing_state";
+const mockHaAppBootstrapStateKey = "homesignal.mock_ha_app_bootstrap_state";
+const autoPairingBridgePath = "/ha_app_pairing?bridge=1";
 const defaultHomeAssistantUrl = "http://192.168.1.3";
-const addonRepositoryDeepLink = "https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fhomesignal-io%2Fhomesignal-home-assistant";
-const installedAddonPath = "/hassio/addon/fdd5d111_homesignal/info";
-const addonBridgePath = "/homesignal/addon-bridge";
-const mockAddonBridgePath = "/addon_bridge_mock";
+const haAppRepositoryDeepLink = "https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fhomesignal-io%2Fhomesignal-home-assistant-app";
+const installedHaAppPath = "/hassio/addon/fdd5d111_homesignal/info";
+const haAppBridgePath = "/homesignal/ha-app-bridge";
+const mockHaAppBridgePath = "/ha_app_bridge_mock";
 const autoPairingContextTtlMs = 2 * 60 * 60 * 1000;
-const addonBridgeProbeTimeoutMs = 3000;
-const addonBridgeAutoContinueDelayMs = 1400;
+const haAppBridgeProbeTimeoutMs = 3000;
+const haAppBridgeAutoContinueDelayMs = 1400;
+const haAppBootstrapLoadingMaxMs = 3000;
+const haAppBootstrapHardStopMs = 10000;
 
 function isLocalMockHost() {
   if (typeof window === "undefined") return false;
@@ -155,13 +157,13 @@ function writeStoredHomeAssistantUrl(url) {
   window.localStorage.setItem(homeAssistantUrlStorageKey, trimmedUrl);
 }
 
-function readMockAddonPairingState() {
+function readMockHaAppPairingState() {
   if (typeof window === "undefined") {
     return { has_ever_paired: false, last_pairing_id: null, paired_at: null };
   }
 
   try {
-    const raw = window.localStorage.getItem(mockAddonPairingStateKey);
+    const raw = window.localStorage.getItem(mockHaAppPairingStateKey);
     if (!raw) return { has_ever_paired: false, last_pairing_id: null, paired_at: null };
     const value = JSON.parse(raw);
     return {
@@ -174,19 +176,19 @@ function readMockAddonPairingState() {
   }
 }
 
-function writeMockAddonPairingState(nextState) {
+function writeMockHaAppPairingState(nextState) {
   if (typeof window === "undefined") return nextState;
-  window.localStorage.setItem(mockAddonPairingStateKey, JSON.stringify(nextState));
+  window.localStorage.setItem(mockHaAppPairingStateKey, JSON.stringify(nextState));
   return nextState;
 }
 
-function readMockAddonBootstrapState() {
+function readMockHaAppBootstrapState() {
   if (typeof window === "undefined") {
     return { has_run_bootstrap: false, last_checked_at: null };
   }
 
   try {
-    const raw = window.localStorage.getItem(mockAddonBootstrapStateKey);
+    const raw = window.localStorage.getItem(mockHaAppBootstrapStateKey);
     if (!raw) return { has_run_bootstrap: false, last_checked_at: null };
     const value = JSON.parse(raw);
     return {
@@ -198,23 +200,24 @@ function readMockAddonBootstrapState() {
   }
 }
 
-function writeMockAddonBootstrapState(nextState) {
+function writeMockHaAppBootstrapState(nextState) {
   if (typeof window === "undefined") return nextState;
-  window.localStorage.setItem(mockAddonBootstrapStateKey, JSON.stringify(nextState));
+  window.localStorage.setItem(mockHaAppBootstrapStateKey, JSON.stringify(nextState));
   return nextState;
 }
 
-function clearMockAddonLocalState() {
+function clearMockHaAppLocalState() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(mockAddonPairingStateKey);
-  window.localStorage.removeItem(mockAddonBootstrapStateKey);
+  window.localStorage.removeItem(mockHaAppPairingStateKey);
+  window.localStorage.removeItem(mockHaAppBootstrapStateKey);
+  window.localStorage.removeItem(autoPairingStorageKey);
 }
 
 // Data wiring hints shown by the wiring overlay.
 // Numeric IDs are stable conversation handles. Keep hints terse and schema-led:
 // name the fields/columns needed, with light napkin math only when computed.
 const wiringHints = {
-  "1": { status: "backed", text: "Fields: presence, backup_status, addon_version, latest_addon_version, ha_version, latest_ha_version. Calc: any unhealthy/drift => action_required." },
+  "1": { status: "backed", text: "Fields: presence, backup_status, ha_app_version, latest_ha_app_version, ha_version, latest_ha_version. Calc: any unhealthy/drift => action_required." },
   "2": { status: "backed", text: "Fields: site_id, device_id. Calc: distinct affected site_id / total site_id." },
   "3": { status: "backed", text: "Fields: dashboard_state, primary_issue, online_count, managed_site_count. Calc: API returns summary; UI renders copy from that shape." },
   "4": { status: "backed", text: "Fields: site_id. Calc: count managed sites." },
@@ -222,7 +225,7 @@ const wiringHints = {
   "6": { status: "backed", text: "Fields: issue_projection[]. Calc: count visible v0 issue rows." },
   "7": { status: "backed", text: "Fields: issue_projection[].site_id. Calc: distinct sites with issue_count > 0." },
   "8": { status: "backed", text: "Fields: backup_status. Calc: count failed backups." },
-  "9": { status: "backed", text: "Fields: addon_version, latest_addon_version. Calc: installed != latest." },
+  "9": { status: "backed", text: "Fields: ha_app_version, latest_ha_app_version. Calc: installed != latest." },
   "10": { status: "backed", text: "Fields: alert_recipients, recipient_status, enabled_subscriptions, site_scope. Calc: configured/verified recipient coverage." },
   "11": { status: "backed", text: "Fields: site_name." },
   "12": { status: "backed", text: "Fields: customer_display_name, service_address_city, service_address_region. Display may choose city/state, but address data exists." },
@@ -245,7 +248,7 @@ const wiringHints = {
   "29": { status: "backed", text: "Fields: activity_feed[].category: alert, backup, device, update, enrollment, account." },
   "30": { status: "backed", text: "Fields: site_category optional. UI defaults to standard Home Assistant/site icon when absent; presentation only." },
   "31": { status: "backed", text: "Fields: issue_projection[].severity: critical, warning, info." },
-  "32": { status: "backed", text: "Fields: addon_version, latest_addon_version. Calc: installed add-on version differs from latest desired/reported release version." },
+  "32": { status: "backed", text: "Fields: ha_app_version, latest_ha_app_version. Calc: installed app version differs from latest desired/reported release version." },
 };
 
 const pages = new Set([
@@ -266,7 +269,7 @@ const pages = new Set([
   "Internal Admin",
   "Internal Diagnostics",
   "Internal Audit",
-  "HA Add-on",
+  "HA App",
   "Schema Coverage",
 ]);
 
@@ -277,22 +280,22 @@ function readRouteHash() {
     return defaultRoute;
   }
 
-  const routeDefault = window.location.pathname === installedAddonPath
-    ? { ...defaultRoute, page: "HA Add-on", addon: "onboarding" }
+  const routeDefault = window.location.pathname === installedHaAppPath
+    ? { ...defaultRoute, page: "HA App", haApp: "onboarding" }
     : defaultRoute;
   const hash = window.location.hash.replace(/^#/, "");
   const params = new URLSearchParams(hash);
   const page = params.get("page");
   const site = params.get("site");
   const device = params.get("device");
-  const addon = params.get("addon");
+  const haApp = params.get("ha_app");
   const wiring = params.get("wiring");
 
   return {
     page: pages.has(page) ? page : routeDefault.page,
     site: sites.some((item) => item.id === site) ? site : routeDefault.site,
     device: devices.some((item) => item.id === device) ? device : routeDefault.device,
-    addon: Object.prototype.hasOwnProperty.call(addonScreens, addon) || Object.prototype.hasOwnProperty.call(addonStatusStates, addon) ? addon : routeDefault.addon,
+    haApp: Object.prototype.hasOwnProperty.call(haAppScreens, haApp) || Object.prototype.hasOwnProperty.call(haAppStatusStates, haApp) ? haApp : routeDefault.haApp,
     wiring: wiring === "on" ? "on" : "off",
   };
 }
@@ -302,7 +305,7 @@ function routeToHash(route) {
   params.set("page", route.page);
   params.set("site", route.site);
   params.set("device", route.device);
-  params.set("addon", route.addon);
+  params.set("ha_app", route.haApp);
   if (route.wiring === "on") {
     params.set("wiring", "on");
   }
@@ -432,8 +435,8 @@ const devices = [
     latest_home_assistant_version: "2026.5.1",
     supervisor_version: "2026.05.0",
     latest_supervisor_version: "2026.05.0",
-    addon_version: "0.1.4",
-    latest_addon_version: "0.1.4",
+    ha_app_version: "0.1.4",
+    latest_ha_app_version: "0.1.4",
     storage_status: "healthy",
     cloud_connection: "connected",
     credential_status: "active",
@@ -455,8 +458,8 @@ const devices = [
     latest_home_assistant_version: "2026.5.1",
     supervisor_version: "2026.05.0",
     latest_supervisor_version: "2026.05.0",
-    addon_version: "0.1.3",
-    latest_addon_version: "0.1.4",
+    ha_app_version: "0.1.3",
+    latest_ha_app_version: "0.1.4",
     storage_status: "warning",
     cloud_connection: "connected",
     credential_status: "active",
@@ -471,7 +474,7 @@ const edgeState = {
       refresh_after: "2026-05-14T12:00:00Z",
       expires_at: "2026-05-20T12:00:00Z",
       telemetry_cadence_seconds: 3600,
-      enabled_event_families: ["plugin_alarm"],
+      enabled_event_families: ["app_alarm"],
     },
     update: {
       desired_version: "0.1.4",
@@ -542,7 +545,7 @@ const releases = [
     version: "0.1.4",
     rollout_id: "rollout_456",
     status: "promoted",
-    published_via: "GitHub / HA add-on repository",
+    published_via: "GitHub / HA app repository",
   },
   {
     id: "rel_015",
@@ -550,7 +553,7 @@ const releases = [
     version: "0.1.5",
     rollout_id: "rollout_500",
     status: "published_not_promoted",
-    published_via: "GitHub / HA add-on repository",
+    published_via: "GitHub / HA app repository",
   },
 ];
 
@@ -593,15 +596,15 @@ const activityEvents = [
     category: "Enrollment",
     time: "Yesterday",
     group: "Yesterday",
-    detail: "Pairing completed and the HomeSignal add-on began reporting.",
+    detail: "Pairing completed and the HomeSignal app began reporting.",
   },
   {
-    action: "Stable add-on release changed",
+    action: "Stable app release changed",
     subject: "0.1.4",
     category: "Update",
     time: "Yesterday",
     group: "Yesterday",
-    detail: "The stable HomeSignal add-on version was advanced for managed sites.",
+    detail: "The stable HomeSignal app version was advanced for managed sites.",
   },
   {
     action: "Credential rotation completed",
@@ -612,12 +615,12 @@ const activityEvents = [
     detail: "The device certificate overlap window closed successfully.",
   },
   {
-    action: "Claim invite created",
+    action: "Pairing code created",
     subject: "Lee Residence",
     category: "Enrollment",
     time: "May 12",
     group: "Earlier",
-    detail: "A new site-bound claim invite was created in the portal.",
+    detail: "A new site-bound pairing code was created in the portal.",
   },
   {
     action: "Alert recipient updated",
@@ -652,7 +655,7 @@ const currentAlerts = [
   },
 ];
 
-const haAddonState = {
+const haAppState = {
   local_state: "UNCLAIMED",
   claim_invite_code: "4f8b0e7a-0f7d-45f8-8b8b-1e25f4d68a10",
   claim_invite_expires_at: "Valid for 72 hours from creation",
@@ -664,9 +667,9 @@ const haAddonState = {
   private_key_path: "/config/iot/private.key",
   cloud_connection: "cloud visible, not paired",
   last_policy_version: "ppv_123",
-  addon_version: "0.1.3",
-  desired_addon_version: "0.1.4",
-  latest_addon_version: "0.1.4",
+  ha_app_version: "0.1.3",
+  desired_ha_app_version: "0.1.4",
+  latest_ha_app_version: "0.1.4",
   update_available_for: "2 days",
   stale_update_threshold_days: 5,
   last_error_excerpt: "No recent errors.",
@@ -682,116 +685,228 @@ const haAddonState = {
   last_command_completed: "None",
 };
 
-const addonScreens = {
+const haAppLogStorageSummary = {
+  capture_level: "info",
+  budget: "32 MiB",
+  used: "7.8 MiB",
+  retained_from: "2026-05-14T10:42:12Z",
+  retained_to: "2026-05-14T12:00:03Z",
+  dropped_count: 0,
+  suppressed_count: 12,
+  active_debug_session: "None",
+  last_cloud_request: "None",
+};
+
+const haAppLogLevels = ["debug", "info", "warning", "error"];
+
+const haAppLogLevelRank = {
+  debug: 0,
+  info: 1,
+  warning: 2,
+  error: 3,
+};
+
+const mockHaAppLogEntries = [
+  {
+    id: "log_001",
+    ts: "2026-05-14T11:58:42Z",
+    level: "info",
+    component: "startup",
+    reason: "startup_complete",
+    message: "HomeSignal Manager runtime started; local state and options loaded.",
+  },
+  {
+    id: "log_002",
+    ts: "2026-05-14T11:58:44Z",
+    level: "info",
+    component: "enrollment",
+    reason: "credential_loaded",
+    message: "Loaded durable device credential from /config/device.json.",
+  },
+  {
+    id: "log_003",
+    ts: "2026-05-14T11:58:46Z",
+    level: "debug",
+    component: "config",
+    reason: "runtime_options_loaded",
+    message: "Loaded app runtime options: capture_level=info, publish_channel=stable.",
+  },
+  {
+    id: "log_004",
+    ts: "2026-05-14T11:58:59Z",
+    level: "info",
+    component: "permissions",
+    reason: "policy_loaded",
+    message: "Local management policy revision 1 loaded with full permissions.",
+  },
+  {
+    id: "log_005",
+    ts: "2026-05-14T11:59:00Z",
+    level: "info",
+    component: "cloud_connection",
+    reason: "connected",
+    message: "Connected to HomeSignal cloud broker.",
+  },
+  {
+    id: "log_006",
+    ts: "2026-05-14T11:59:01Z",
+    level: "info",
+    component: "telemetry",
+    reason: "health_snapshot_sent",
+    message: "Published HomeSignal Manager health snapshot schema_version=1 message_id=01J00000000000000000000000.",
+  },
+  {
+    id: "log_007",
+    ts: "2026-05-14T11:59:05Z",
+    level: "warning",
+    component: "logging",
+    reason: "over_budget",
+    message: "Suppressed 12 debug entries in the current local logging window.",
+  },
+  {
+    id: "log_008",
+    ts: "2026-05-14T11:59:19Z",
+    level: "info",
+    component: "commands",
+    reason: "poll_complete",
+    message: "No pending remote management commands.",
+  },
+  {
+    id: "log_009",
+    ts: "2026-05-14T11:59:30Z",
+    level: "info",
+    component: "local_probe",
+    reason: "readiness_probe_completed",
+    message: "App local readiness probe completed successfully.",
+  },
+  {
+    id: "log_010",
+    ts: "2026-05-14T11:59:31Z",
+    level: "warning",
+    component: "commands",
+    reason: "command_rejected",
+    message: "Rejected command cmd_01J00000000000000000000001 because local permission diagnostics_error_log_bundle is disabled.",
+  },
+  {
+    id: "log_011",
+    ts: "2026-05-14T11:59:42Z",
+    level: "debug",
+    component: "logging",
+    reason: "segment_rollover_check",
+    message: "Diagnostic log segment budget check complete: used=7.8MiB budget=32MiB.",
+  },
+  {
+    id: "log_012",
+    ts: "2026-05-14T12:00:03Z",
+    level: "info",
+    component: "updates",
+    reason: "update_posture_checked",
+    message: "HomeSignal Manager update posture checked: installed=0.1.3 latest=0.1.4.",
+  },
+];
+
+const haAppScreens = {
   status: { label: "Status" },
   pairing: { label: "Pairing" },
   permissions: { label: "Permissions" },
   advanced: { label: "Advanced" },
 };
 
-const addonStatusStates = {
+const haAppStatusStates = {
   onboarding: { label: "Fresh install" },
   healthy: { label: "Healthy" },
   disconnected: { label: "Disconnected" },
   outdated: { label: "Update out of date" },
 };
 
-const addonStatusHighlights = [
+const haAppStatusHighlights = [
   ["HomeSignal cloud", "Visible", "Ready", "Cloud can be reached"],
   ["Pairing", "Not paired", "Needs attention", "No site association yet"],
   ["Home Assistant Core", "Connected", "Ready", "Core API responds"],
   ["Supervisor API", "Connected", "Ready", "Supervisor API responds"],
 ];
 
-const addonStatusSignals = [
+const haAppStatusSignals = [
   ["Overall health", "Ready to pair", "Ready", "Derived from local checks"],
   ["Attention reasons", "Not paired", "Needs attention", "Pairing required before cloud reporting"],
-  ["HomeSignal add-on", "Running", "Ready", "Local add-on process"],
-  ["HomeSignal add-on version", haAddonState.addon_version, "Needs attention", `Latest ${haAddonState.latest_addon_version}`],
+  ["HomeSignal app", "Running", "Ready", "Local app process"],
+  ["HomeSignal app version", haAppState.ha_app_version, "Needs attention", `Latest ${haAppState.latest_ha_app_version}`],
   ["Home Assistant Core", "Connected", "Ready", "Core API"],
   ["Home Assistant version", "2026.5.1", "Ready", "Reported locally"],
   ["Supervisor API", "Connected", "Ready", "Supervisor API"],
   ["Supervisor version", "2026.05.0", "Ready", "Reported locally"],
-  ["Storage", "Healthy", "Ready", "Local add-on storage"],
+  ["Storage", "Healthy", "Ready", "Local app storage"],
   ["Backups", "Not reporting yet", "Unavailable", "Available after pairing"],
   ["Updates", "New version available", "Needs attention", "Advisory after 48 hours"],
 ];
 
-const addonHealthSnapshot = [
+const haAppHealthSnapshot = [
   ["HomeSignal agent", "OK", "0.1.3 · uptime 24h", "ready"],
   ["Cloud access", "Ready", "HomeSignal portal reachable", "ready"],
   ["Account status", "Not paired yet", "First-time setup has not been completed", "neutral"],
-  ["Add-on update", "Needs attention", "0.1.3 installed · 0.1.4 available", "warning"],
+  ["HomeSignal App Update", "Needs attention", "0.1.3 installed · 0.1.4 available", "warning"],
   ["Home Assistant Core", "Connected", "2026.5.1 · last checked 11:59", "ready"],
   ["Home Assistant Supervisor", "Connected", "2026.05.0 · last checked 11:59", "ready"],
   ["Storage", "OK", "61.4% used · 12 GB free", "ready"],
 ];
 
-const addonHealthySnapshot = [
+const haAppHealthySnapshot = [
   ["HomeSignal agent", "OK", "0.1.4 · uptime 24h", "ready"],
   ["Cloud paths", "OK", "HTTPS reachable · IoT connected", "ready"],
   ["Telemetry", "Reported", "Last reported May 14, 2026, 11:59 AM", "ready"],
   ["Account status", "Linked", "Northstar Smart Homes · Smith Residence", "ready"],
-  ["Add-on update", "Current", "0.1.4 installed · stable channel", "ready"],
+  ["HomeSignal App Update", "Current", "0.1.4 installed · stable channel", "ready"],
   ["Home Assistant Core", "Connected", "2026.5.1 · last checked 11:59", "ready"],
   ["Home Assistant Supervisor", "Connected", "2026.05.0 · last checked 11:59", "ready"],
   ["Backup", "OK", "Last success 03:00 · none running", "ready"],
   ["Storage", "OK", "61.4% used · 12 GB free", "ready"],
-  ["Managed add-ons", "OK", "Alarm Bridge current · 42 events/hour", "ready"],
+  ["Managed apps", "OK", "Alarm Bridge current · 42 events/hour", "ready"],
   ["Runtime logs", "OK", "No recent warnings", "ready"],
 ];
 
-const addonDisconnectedSnapshot = [
+const haAppDisconnectedSnapshot = [
   ["HomeSignal agent", "OK", "0.1.4 · uptime 24h", "ready"],
   ["Cloud paths", "Disconnected", "Last successful connection May 14, 2026, 11:12 AM", "warning"],
   ["Telemetry", "Not reporting", "Last reported May 14, 2026, 11:12 AM", "warning"],
   ["Account status", "Linked", "Northstar Smart Homes · Smith Residence", "ready"],
-  ["Add-on update", "Current", "0.1.4 installed · stable channel", "ready"],
+  ["HomeSignal App Update", "Current", "0.1.4 installed · stable channel", "ready"],
   ["Home Assistant Core", "Connected", "2026.5.1 · last checked 11:59", "ready"],
   ["Home Assistant Supervisor", "Connected", "2026.05.0 · last checked 11:59", "ready"],
   ["Backup", "OK", "Last success 03:00 · none running", "ready"],
   ["Storage", "OK", "61.4% used · 12 GB free", "ready"],
-  ["Managed add-ons", "OK", "Alarm Bridge current · 42 events/hour", "ready"],
+  ["Managed apps", "OK", "Alarm Bridge current · 42 events/hour", "ready"],
   ["Runtime logs", "Review", "Cloud reconnect backoff active", "warning"],
 ];
 
-const addonOutdatedSnapshot = [
+const haAppOutdatedSnapshot = [
   ["HomeSignal agent", "OK", "0.1.3 · uptime 24h", "ready"],
   ["Cloud paths", "OK", "HTTPS reachable · IoT connected", "ready"],
   ["Telemetry", "Reported", "Last reported May 14, 2026, 11:59 AM", "ready"],
   ["Account status", "Linked", "Northstar Smart Homes · Smith Residence", "ready"],
-  ["Add-on update", "Action required", "0.1.3 installed · 0.1.4 available for 6 days", "warning"],
+  ["HomeSignal App Update", "Action required", "0.1.3 installed · 0.1.4 available for 6 days", "warning"],
   ["Home Assistant Core", "Connected", "2026.5.1 · last checked 11:59", "ready"],
   ["Home Assistant Supervisor", "Connected", "2026.05.0 · last checked 11:59", "ready"],
   ["Backup", "OK", "Last success 03:00 · none running", "ready"],
   ["Storage", "OK", "61.4% used · 12 GB free", "ready"],
-  ["Managed add-ons", "OK", "Alarm Bridge current · 42 events/hour", "ready"],
+  ["Managed apps", "OK", "Alarm Bridge current · 42 events/hour", "ready"],
   ["Runtime logs", "OK", "No recent warnings", "ready"],
 ];
 
-const addonUpdatePosture = [
-  ["Installed version", haAddonState.addon_version, "Needs attention", "Running add-on version"],
-  ["Latest available version", haAddonState.latest_addon_version, "Ready", `Available for ${haAddonState.update_available_for}`],
+const haAppUpdatePosture = [
+  ["Installed version", haAppState.ha_app_version, "Needs attention", "Running app version"],
+  ["Latest available version", haAppState.latest_ha_app_version, "Ready", `Available for ${haAppState.update_available_for}`],
   ["Update status", "New version available", "Needs attention", "Grace period has passed"],
   ["Auto-update setting", "Check in Home Assistant", "Needs attention", "HomeSignal cannot read this directly"],
 ];
 
-const fullControlPermissionChips = [
-  "Read Home Assistant status",
-  "Read backup status",
-  "Trigger approved backups",
-  "Read storage status",
-  "View installed add-ons",
-  "Read HomeSignal update status",
-  "Apply HomeSignal update intent",
-  "Run bounded diagnostics",
-  "Send runtime warning summaries",
-];
+const fullPermissionGroupOrder = ["Local status", "Apps", "Approved maintenance", "Reports"];
 
-const addonControlPolicy = [
+const haAppControlPolicy = [
   {
     key: "ha_status_read",
     label: "Read Home Assistant status",
+    fullPermissionGroup: "Local status",
+    fullPermissionLabel: "View Home Assistant health",
     action: "read Home Assistant status",
     description: "Read Core and Supervisor reachability and version status.",
     enabled: true,
@@ -803,6 +918,8 @@ const addonControlPolicy = [
   {
     key: "ha_backup_status_read",
     label: "Read backup status",
+    fullPermissionGroup: "Local status",
+    fullPermissionLabel: "View backup status",
     action: "read backup status",
     description: "Read bounded Home Assistant backup summary and status.",
     enabled: true,
@@ -814,6 +931,8 @@ const addonControlPolicy = [
   {
     key: "ha_backup_trigger",
     label: "Trigger approved backups",
+    fullPermissionGroup: "Approved maintenance",
+    fullPermissionLabel: "Run approved backup actions",
     action: "trigger approved backup",
     description: "Allow approved cloud backup trigger commands.",
     enabled: true,
@@ -825,6 +944,8 @@ const addonControlPolicy = [
   {
     key: "ha_storage_status_read",
     label: "Read storage status",
+    fullPermissionGroup: "Local status",
+    fullPermissionLabel: "View storage status",
     action: "read storage status",
     description: "Read bounded local storage status.",
     enabled: true,
@@ -834,48 +955,56 @@ const addonControlPolicy = [
     why: "Used to warn before the Home Assistant host runs low on storage.",
   },
   {
-    key: "ha_addon_inventory_read",
-    label: "View installed add-ons",
-    action: "view installed add-ons",
-    description: "Read installed add-on names, versions, update status, and health.",
+    key: "ha_app_inventory_read",
+    label: "View installed apps",
+    fullPermissionGroup: "Apps",
+    fullPermissionLabel: "View installed apps",
+    action: "view installed apps",
+    description: "Read installed app names, versions, update status, and health.",
     enabled: true,
     boundary: "Default managed install",
     audit: "normal",
     actor: "HomeSignal cloud and authorized site users",
-    why: "Used to show update posture and managed add-on health without changing the Home Assistant installation.",
+    why: "Used to show update posture and managed app health without changing the Home Assistant installation.",
   },
   {
-    key: "homesignal_addon_update_status_read",
-    label: "Read HomeSignal add-on update status",
-    action: "read HomeSignal add-on update status",
-    description: "Read the installed, latest, desired, and update-readiness state for this add-on.",
+    key: "homesignal_app_update_status_read",
+    label: "Read HomeSignal app update status",
+    fullPermissionGroup: "Apps",
+    fullPermissionLabel: "View HomeSignal update status",
+    action: "read HomeSignal app update status",
+    description: "Read the installed, latest, desired, and update-readiness state for this app.",
     enabled: true,
     boundary: "Default managed install",
     audit: "normal",
     actor: "HomeSignal cloud and authorized site users",
-    why: "Used to explain whether the HomeSignal add-on is current or needs local update attention.",
+    why: "Used to explain whether the HomeSignal app is current or needs local update attention.",
   },
   {
-    key: "homesignal_addon_update_intent",
-    label: "Apply HomeSignal add-on update intent",
-    action: "apply HomeSignal add-on update intent",
-    description: "Allow HomeSignal to request the desired HomeSignal add-on version or channel.",
+    key: "homesignal_app_update_intent",
+    label: "Apply HomeSignal app update intent",
+    fullPermissionGroup: "Apps",
+    fullPermissionLabel: "Manage approved HomeSignal app updates",
+    action: "apply HomeSignal app update intent",
+    description: "Allow HomeSignal to request the desired HomeSignal app version or channel.",
     enabled: true,
     boundary: "Default managed install",
     audit: "normal",
     actor: "HomeSignal cloud and authorized site admins",
-    why: "Used to keep the HomeSignal add-on aligned with the version policy chosen for the site.",
+    why: "Used to keep the HomeSignal app aligned with the version policy chosen for the site.",
   },
   {
     key: "diagnostics_basic",
     label: "Run bounded diagnostics",
+    fullPermissionGroup: "Approved maintenance",
+    fullPermissionLabel: "Run bounded diagnostics",
     action: "run bounded diagnostics",
-    description: "Collect bounded add-on, connectivity, and update-readiness diagnostics.",
+    description: "Collect bounded app, connectivity, and update-readiness diagnostics.",
     enabled: true,
     boundary: "Default managed install",
     audit: "sensitive",
     actor: "HomeSignal support or authorized site admins",
-    why: "Used when an installer or support user needs enough local context to troubleshoot a failed command or unhealthy add-on.",
+    why: "Used when an installer or support user needs enough local context to troubleshoot a failed command or unhealthy app.",
   },
   {
     key: "diagnostics_error_log_bundle",
@@ -886,43 +1015,60 @@ const addonControlPolicy = [
     boundary: "Local opt-in",
     audit: "sensitive",
     actor: "Authorized site admins after local opt-in",
-    why: "Logs can contain more sensitive operational detail, so this starts disabled and can only be enabled from the local add-on.",
+    why: "Logs can contain more sensitive operational detail, so this starts disabled and can only be enabled from the local app.",
   },
   {
     key: "runtime_log_summary",
     label: "Send runtime warning summaries",
+    fullPermissionGroup: "Reports",
+    fullPermissionLabel: "Send runtime warning summaries",
     action: "send runtime warning summaries",
     description: "Send bounded collapsed runtime warning summaries.",
     enabled: true,
     boundary: "Default managed install",
     audit: "normal",
-    actor: "HomeSignal add-on runtime",
+    actor: "HomeSignal app runtime",
     why: "Used to show recurring local runtime issues without uploading raw logs.",
   },
 ];
 
-const unsupportedAddonControls = [
-  ["Install add-ons", "Future command contract required"],
-  ["Rollback add-ons", "Future command contract required"],
+const unsupportedHaAppControls = [
+  ["Install Home Assistant Apps", "Future command contract required"],
+  ["Rollback Home Assistant Apps", "Future command contract required"],
   ["Update Home Assistant Core", "Future command contract required"],
   ["Broad Home Assistant diagnostics", "Not executable in v0"],
   ["Raw log export", "Not allowed"],
   ["Arbitrary Home Assistant service calls", "Never allowed"],
 ];
 
-const initialAddonPermissionPolicy = {
+const initialHaAppPermissionPolicy = {
   accessMode: "full",
-  granularControls: Object.fromEntries(addonControlPolicy.map((control) => [control.key, control.enabled])),
+  granularControls: Object.fromEntries(haAppControlPolicy.map((control) => [control.key, control.enabled])),
 };
 
-const addonAuditEvents = [
+const haAppFullPermissionControls = haAppControlPolicy.filter(
+  (control) => control.enabled && control.boundary === "Default managed install" && control.fullPermissionGroup
+);
+
+const fullControlPermissionGroups = fullPermissionGroupOrder
+  .map((group) => [
+    group,
+    haAppFullPermissionControls
+      .filter((control) => control.fullPermissionGroup === group)
+      .map((control) => control.fullPermissionLabel || control.label),
+  ])
+  .filter(([, permissions]) => permissions.length > 0);
+
+const fullControlPermissionLabels = haAppFullPermissionControls.map((control) => control.fullPermissionLabel || control.label);
+
+const haAppAuditEvents = [
   ["Update posture checked", "Supervisor API returned auto-update off", "2 min ago"],
   ["Control policy reviewed", "Diagnostics enabled; log export disabled", "2 min ago"],
-  ["Claim invite created", "GUID code expires in 71 hours", "3 min ago"],
+  ["Pairing code created", "Pairing code expires in 71 hours", "3 min ago"],
   ["Supervisor capability check completed", "Required local APIs available", "3 min ago"],
 ];
 
-function AddonPairingBridgePage() {
+function HaAppPairingBridgePage() {
   const [, setStoredContext] = useState(() => readAutoPairingContext());
   const [storedHomeAssistantUrl, setStoredHomeAssistantUrl] = useState(() => readStoredHomeAssistantUrl());
   const [draftHomeAssistantUrl, setDraftHomeAssistantUrl] = useState(() => readStoredHomeAssistantUrl());
@@ -938,12 +1084,12 @@ function AddonPairingBridgePage() {
   const preferredHomeAssistantUrlParam = (mockHomeAssistantUrlParam || homeAssistantUrlParam).replace(/\/$/, "");
   const visibleHomeAssistantUrl = (allowHomeAssistantUrlParam && preferredHomeAssistantUrlParam) || storedHomeAssistantUrl;
   const realHomeAssistantUrl = visibleHomeAssistantUrl || defaultHomeAssistantUrl;
-  const realInstalledAddonUrl = `${realHomeAssistantUrl.replace(/\/$/, "")}${installedAddonPath}`;
-  const realAddonBridgeUrl = `${realHomeAssistantUrl.replace(/\/$/, "")}${addonBridgePath}`;
-  const mockAddonBridgeUrl = mockHomeAssistantUrlParam ? `${mockHomeAssistantUrlParam.replace(/\/$/, "")}${mockAddonBridgePath}` : "";
-  const addonBridgeUrl = params.get("bridge_url") || params.get("mock_bridge_url") || mockAddonBridgeUrl || realAddonBridgeUrl;
-  const installAddonUrl = addonRepositoryDeepLink;
-  const installedAddonUrl = realInstalledAddonUrl;
+  const realInstalledAppUrl = `${realHomeAssistantUrl.replace(/\/$/, "")}${installedHaAppPath}`;
+  const realHaAppBridgeUrl = `${realHomeAssistantUrl.replace(/\/$/, "")}${haAppBridgePath}`;
+  const mockHaAppBridgeUrl = mockHomeAssistantUrlParam ? `${mockHomeAssistantUrlParam.replace(/\/$/, "")}${mockHaAppBridgePath}` : "";
+  const haAppBridgeUrl = params.get("bridge_url") || params.get("mock_ha_app_bridge_url") || mockHaAppBridgeUrl || realHaAppBridgeUrl;
+  const installHaAppUrl = haAppRepositoryDeepLink;
+  const installedHaAppUrl = realInstalledAppUrl;
   const hasHomeAssistantUrl = Boolean(visibleHomeAssistantUrl);
 
   useEffect(() => {
@@ -966,7 +1112,7 @@ function AddonPairingBridgePage() {
     }
 
     setInitialLookupDone(false);
-    const timeout = window.setTimeout(() => setInitialLookupDone(true), addonBridgeProbeTimeoutMs);
+    const timeout = window.setTimeout(() => setInitialLookupDone(true), haAppBridgeProbeTimeoutMs);
     return () => window.clearTimeout(timeout);
   }, [hasHomeAssistantUrl]);
 
@@ -1017,7 +1163,7 @@ function AddonPairingBridgePage() {
     setStoredHomeAssistantUrl(nextUrl);
     setDraftHomeAssistantUrl(nextUrl);
 
-    window.location.href = `${nextUrl}${installedAddonPath}`;
+    window.location.href = `${nextUrl}${installedHaAppPath}`;
   };
 
   const showNoSavedHomeAssistantUrlMock = () => {
@@ -1046,7 +1192,7 @@ function AddonPairingBridgePage() {
     <main className="min-h-screen bg-[#f5f5f5] px-4 py-10 font-['Roboto',Arial,sans-serif] text-[#212121]">
       <div className="mx-auto max-w-3xl">
         {isLocalMockHost() && (
-          <AddonPairingMockControls
+          <HaAppPairingMockControls
             activeView={hasHomeAssistantUrl ? "saved" : "empty"}
             onShowNoSavedAddress={showNoSavedHomeAssistantUrlMock}
             onShowSavedAddress={showSavedHomeAssistantUrlMock}
@@ -1054,13 +1200,13 @@ function AddonPairingBridgePage() {
         )}
 
         {hasHomeAssistantUrl ? (
-          <AddonPairingKnownHomeAssistant
+          <HaAppPairingKnownHomeAssistant
             homeAssistantUrl={visibleHomeAssistantUrl}
             draftHomeAssistantUrl={draftHomeAssistantUrl}
             isEditing={isEditingHomeAssistantUrl}
-            installedAddonUrl={installedAddonUrl}
-            installAddonUrl={installAddonUrl}
-            addonBridgeUrl={addonBridgeUrl}
+            installedHaAppUrl={installedHaAppUrl}
+            installHaAppUrl={installHaAppUrl}
+            haAppBridgeUrl={haAppBridgeUrl}
             pairingId={pairingId}
             onDraftChange={setDraftHomeAssistantUrl}
             onEdit={() => setIsEditingHomeAssistantUrl(true)}
@@ -1071,17 +1217,17 @@ function AddonPairingBridgePage() {
             onSave={saveHomeAssistantUrl}
           />
         ) : !initialLookupDone ? (
-          <AddonPairingDetector
-            bridgeStatus={{ state: "checking", label: "Checking HomeSignal add-on" }}
+          <HaAppPairingDetector
+            bridgeStatus={{ state: "checking", label: "Checking HomeSignal app" }}
             homeAssistantUrl="No Home Assistant address saved"
-            installedAddonUrl=""
+            installedHaAppUrl=""
             pairingId={pairingId}
           />
         ) : (
-          <AddonPairingUnknownHomeAssistant
+          <HaAppPairingUnknownHomeAssistant
             draftHomeAssistantUrl={draftHomeAssistantUrl}
-            installAddonUrl={installAddonUrl}
-            installedAddonUrl={installedAddonUrl}
+            installHaAppUrl={installHaAppUrl}
+            installedHaAppUrl={installedHaAppUrl}
             onDraftChange={setDraftHomeAssistantUrl}
             onOpenDraft={openDraftHomeAssistantUrl}
           />
@@ -1091,7 +1237,7 @@ function AddonPairingBridgePage() {
   );
 }
 
-function AddonPairingMockControls({ activeView, onShowNoSavedAddress, onShowSavedAddress }) {
+function HaAppPairingMockControls({ activeView, onShowNoSavedAddress, onShowSavedAddress }) {
   return (
     <section className="mb-7 rounded-lg border border-dashed border-[#bdbdbd] bg-white px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1130,30 +1276,30 @@ function AddonPairingMockControls({ activeView, onShowNoSavedAddress, onShowSave
   );
 }
 
-function AddonPairingKnownHomeAssistant({
+function HaAppPairingKnownHomeAssistant({
   homeAssistantUrl,
   draftHomeAssistantUrl,
   isEditing,
-  installedAddonUrl,
-  installAddonUrl,
-  addonBridgeUrl,
+  installedHaAppUrl,
+  installHaAppUrl,
+  haAppBridgeUrl,
   pairingId,
   onDraftChange,
   onEdit,
   onCancelEdit,
   onSave,
 }) {
-  const [bridgeStatus, setBridgeStatus] = useState({ state: "checking", label: "Checking HomeSignal add-on" });
+  const [bridgeStatus, setBridgeStatus] = useState({ state: "checking", label: "Checking HomeSignal app" });
   const bridgeIframeRef = useRef(null);
   const bridgeRequestIdRef = useRef(null);
   const autoContinueTimerRef = useRef(null);
-  const addonsDashboardUrl = `${homeAssistantUrl.replace(/\/$/, "")}/hassio/dashboard`;
+  const haAppsDashboardUrl = `${homeAssistantUrl.replace(/\/$/, "")}/hassio/dashboard`;
 
   useEffect(() => {
     if (isEditing) return undefined;
 
     let cancelled = false;
-    const requestId = `addon_bridge_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const requestId = `ha_app_bridge_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     bridgeRequestIdRef.current = requestId;
 
     let timeout = null;
@@ -1165,7 +1311,7 @@ function AddonPairingKnownHomeAssistant({
 
       targetWindow.postMessage(
         {
-          type: "homesignal.addon_bridge.ping",
+          type: "homesignal.ha_app_bridge.ping",
           request_id: requestId,
           expected_origin: window.location.origin,
         },
@@ -1176,7 +1322,7 @@ function AddonPairingKnownHomeAssistant({
     const onMessage = (event) => {
       if (cancelled || event.source !== bridgeIframeRef.current?.contentWindow) return;
       if (typeof event.data !== "object" || event.data === null) return;
-      if (event.data.type !== "homesignal.addon_bridge.pong") return;
+      if (event.data.type !== "homesignal.ha_app_bridge.pong") return;
       if (event.data.request_id !== requestId) return;
 
       if (timeout) window.clearTimeout(timeout);
@@ -1185,8 +1331,8 @@ function AddonPairingKnownHomeAssistant({
       if (event.data.ok) {
         setBridgeStatus({
           state: "found",
-          label: "HomeSignal add-on found",
-          detail: event.data.addon?.version ? `Add-on version ${event.data.addon.version}` : "",
+          label: "HomeSignal app found",
+          detail: event.data.app?.version ? `App version ${event.data.app.version}` : "",
         });
       } else {
         setBridgeStatus({ state: "not_found", label: "Could not find HomeSignal at this address" });
@@ -1194,13 +1340,13 @@ function AddonPairingKnownHomeAssistant({
     };
 
     window.addEventListener("message", onMessage);
-    setBridgeStatus({ state: "checking", label: "Checking HomeSignal add-on" });
+    setBridgeStatus({ state: "checking", label: "Checking HomeSignal app" });
     pingTimers = [100, 450, 1000].map((delay) => window.setTimeout(sendPing, delay));
     timeout = window.setTimeout(() => {
       if (!cancelled) {
         setBridgeStatus({ state: "not_found", label: "Could not find HomeSignal at this address" });
       }
-    }, addonBridgeProbeTimeoutMs);
+    }, haAppBridgeProbeTimeoutMs);
 
     return () => {
       cancelled = true;
@@ -1208,17 +1354,17 @@ function AddonPairingKnownHomeAssistant({
       pingTimers.forEach((timer) => window.clearTimeout(timer));
       window.removeEventListener("message", onMessage);
     };
-  }, [addonBridgeUrl, isEditing]);
+  }, [haAppBridgeUrl, isEditing]);
 
   useEffect(() => {
     if (!pairingId || bridgeStatus.state !== "found" || isEditing) return undefined;
 
     autoContinueTimerRef.current = window.setTimeout(() => {
-      window.location.href = installedAddonUrl;
-    }, addonBridgeAutoContinueDelayMs);
+      window.location.href = installedHaAppUrl;
+    }, haAppBridgeAutoContinueDelayMs);
 
     return () => window.clearTimeout(autoContinueTimerRef.current);
-  }, [bridgeStatus.state, installedAddonUrl, isEditing, pairingId]);
+  }, [bridgeStatus.state, installedHaAppUrl, isEditing, pairingId]);
 
   const showDetector = !isEditing && bridgeStatus.state !== "not_found";
 
@@ -1227,15 +1373,15 @@ function AddonPairingKnownHomeAssistant({
       {!isEditing && (
         <iframe
           ref={bridgeIframeRef}
-          src={addonBridgeUrl}
-          title="HomeSignal add-on bridge probe"
+          src={haAppBridgeUrl}
+          title="HomeSignal app bridge probe"
           className="hidden"
           onLoad={() => {
             const targetWindow = bridgeIframeRef.current?.contentWindow;
             if (!targetWindow) return;
             targetWindow.postMessage(
               {
-                type: "homesignal.addon_bridge.ping",
+                type: "homesignal.ha_app_bridge.ping",
                 request_id: bridgeRequestIdRef.current,
                 expected_origin: window.location.origin,
               },
@@ -1246,21 +1392,21 @@ function AddonPairingKnownHomeAssistant({
       )}
 
       {showDetector ? (
-        <AddonPairingDetector
+        <HaAppPairingDetector
           bridgeStatus={bridgeStatus}
-          installedAddonUrl={installedAddonUrl}
+          installedHaAppUrl={installedHaAppUrl}
           homeAssistantUrl={homeAssistantUrl}
           pairingId={pairingId}
         />
       ) : (
-        <AddonPairingFallbackOptions
+        <HaAppPairingFallbackOptions
           title="We could not find HomeSignal in Home Assistant"
-          description="The add-on may not be installed yet, Home Assistant may be stopped, or the address may need to be changed."
+          description="The app may not be installed yet, Home Assistant may be stopped, or the address may need to be changed."
           homeAssistantUrl={homeAssistantUrl}
           draftHomeAssistantUrl={draftHomeAssistantUrl}
-          installedAddonUrl={installedAddonUrl}
-          addonsDashboardUrl={addonsDashboardUrl}
-          installAddonUrl={installAddonUrl}
+          installedHaAppUrl={installedHaAppUrl}
+          haAppsDashboardUrl={haAppsDashboardUrl}
+          installHaAppUrl={installHaAppUrl}
           isEditing={isEditing}
           onDraftChange={onDraftChange}
           onEdit={onEdit}
@@ -1272,49 +1418,49 @@ function AddonPairingKnownHomeAssistant({
   );
 }
 
-function AddonPairingUnknownHomeAssistant({
+function HaAppPairingUnknownHomeAssistant({
   draftHomeAssistantUrl,
-  installAddonUrl,
+  installHaAppUrl,
   onDraftChange,
   onOpenDraft,
 }) {
   const manualHomeAssistantUrl = draftHomeAssistantUrl.trim().replace(/\/$/, "");
-  const manualInstalledAddonUrl = manualHomeAssistantUrl ? `${manualHomeAssistantUrl}${installedAddonPath}` : "";
-  const manualAddonsDashboardUrl = manualHomeAssistantUrl ? `${manualHomeAssistantUrl}/hassio/dashboard` : "";
+  const manualInstalledAppUrl = manualHomeAssistantUrl ? `${manualHomeAssistantUrl}${installedHaAppPath}` : "";
+  const manualAppsDashboardUrl = manualHomeAssistantUrl ? `${manualHomeAssistantUrl}/hassio/dashboard` : "";
 
   return (
-    <AddonPairingFallbackOptions
+    <HaAppPairingFallbackOptions
       title="Pair Home Assistant with HomeSignal"
-      description="Install the HomeSignal add-on to complete pairing."
+      description="Install the HomeSignal app to complete pairing."
       homeAssistantUrl={manualHomeAssistantUrl}
       draftHomeAssistantUrl={draftHomeAssistantUrl}
-      installedAddonUrl={manualInstalledAddonUrl}
-      addonsDashboardUrl={manualAddonsDashboardUrl}
-      installAddonUrl={installAddonUrl}
+      installedHaAppUrl={manualInstalledAppUrl}
+      haAppsDashboardUrl={manualAppsDashboardUrl}
+      installHaAppUrl={installHaAppUrl}
       isEditing
       onDraftChange={onDraftChange}
       onSave={onOpenDraft}
-      saveLabel="Open HomeSignal add-on"
+      saveLabel="Open HomeSignal app"
     />
   );
 }
 
-function AddonPairingDetector({ bridgeStatus, homeAssistantUrl, pairingId }) {
+function HaAppPairingDetector({ bridgeStatus, homeAssistantUrl, pairingId }) {
   const isFound = bridgeStatus.state === "found";
 
   return (
     <section className="flex min-h-[68vh] items-center justify-center text-center">
       <div className="max-w-xl">
         <div className="mx-auto flex h-14 w-14 items-center justify-center">
-          {isFound ? <AddonPairingCheckIcon /> : <AddonPairingSpinner />}
+          {isFound ? <HaAppPairingCheckIcon /> : <HaAppPairingSpinner />}
         </div>
         <h1 className="mt-6 text-4xl font-normal tracking-normal">
           {isFound ? "HomeSignal found" : "Looking for HomeSignal"}
         </h1>
         <p className="mx-auto mt-3 max-w-md text-base leading-6 text-[#616161]">
           {isFound
-            ? "We found the HomeSignal add-on in Home Assistant."
-            : "Checking your local Home Assistant for the HomeSignal add-on."}
+            ? "We found the HomeSignal app in Home Assistant."
+            : "Checking your local Home Assistant for the HomeSignal app."}
         </p>
         <p className="mt-5 break-all font-mono text-sm text-[#616161]">{homeAssistantUrl}</p>
 
@@ -1328,14 +1474,14 @@ function AddonPairingDetector({ bridgeStatus, homeAssistantUrl, pairingId }) {
   );
 }
 
-function AddonPairingFallbackOptions({
+function HaAppPairingFallbackOptions({
   title,
   description,
   homeAssistantUrl,
   draftHomeAssistantUrl,
-  installedAddonUrl,
-  addonsDashboardUrl,
-  installAddonUrl,
+  installedHaAppUrl,
+  haAppsDashboardUrl,
+  installHaAppUrl,
   isEditing,
   onDraftChange,
   onEdit,
@@ -1360,12 +1506,12 @@ function AddonPairingFallbackOptions({
       </div>
 
       <section className="mx-auto mt-8 max-w-2xl rounded-xl border border-[#e0e0e0] bg-white p-7 text-center">
-        <h2 className="text-2xl font-normal text-[#212121]">Install HomeSignal add-on</h2>
+        <h2 className="text-2xl font-normal text-[#212121]">Install HomeSignal app</h2>
         <p className="mx-auto mt-3 max-w-md text-base leading-6 text-[#616161]">
           Add HomeSignal to Home Assistant, then return here to continue pairing.
         </p>
         <a
-          href={installAddonUrl}
+          href={installHaAppUrl}
           className="mt-6 inline-flex rounded-full bg-[#039dcc] px-8 py-3 text-base font-medium text-white hover:bg-[#0288d1]"
         >
           Install in Home Assistant
@@ -1375,17 +1521,17 @@ function AddonPairingFallbackOptions({
       <section className="mx-auto mt-6 max-w-2xl rounded-xl border border-[#e0e0e0] bg-transparent p-5">
         <h2 className="text-lg font-medium text-[#212121]">Open manually</h2>
         <p className="mt-2 text-sm leading-6 text-[#616161]">
-          Use this if the add-on is already installed or the Home Assistant address needs adjustment.
+          Use this if the app is already installed or the Home Assistant address needs adjustment.
         </p>
 
         {isEditing ? (
           <div className="mt-4">
-            <label className="text-sm font-medium text-[#616161]" htmlFor="addon-pairing-ha-url">
+            <label className="text-sm font-medium text-[#616161]" htmlFor="app-pairing-ha-url">
               Home Assistant address
             </label>
             <div className="mt-2 grid gap-3 md:grid-cols-[1fr_auto]">
               <input
-                id="addon-pairing-ha-url"
+                id="app-pairing-ha-url"
                 type="url"
                 value={draftHomeAssistantUrl}
                 onChange={(event) => onDraftChange(event.target.value)}
@@ -1430,38 +1576,38 @@ function AddonPairingFallbackOptions({
           </div>
         )}
 
-        {installedAddonUrl && (
-          <AddonPairingUrlRow
-            label="Full add-on URL"
-            value={installedAddonUrl}
-            copied={copiedField === "addon"}
-            onCopy={() => copyField("addon", installedAddonUrl)}
+        {installedHaAppUrl && (
+          <HaAppPairingUrlRow
+            label="Full app URL"
+            value={installedHaAppUrl}
+            copied={copiedField === "app"}
+            onCopy={() => copyField("app", installedHaAppUrl)}
           />
         )}
-        {addonsDashboardUrl && (
-          <AddonPairingUrlRow
-            label="Home Assistant add-ons"
-            value={addonsDashboardUrl}
-            copied={copiedField === "addons"}
-            onCopy={() => copyField("addons", addonsDashboardUrl)}
+        {haAppsDashboardUrl && (
+          <HaAppPairingUrlRow
+            label="Home Assistant apps"
+            value={haAppsDashboardUrl}
+            copied={copiedField === "ha_apps"}
+            onCopy={() => copyField("ha_apps", haAppsDashboardUrl)}
           />
         )}
 
         <div className="mt-5 flex flex-wrap gap-3">
-          {installedAddonUrl && (
+          {installedHaAppUrl && (
             <a
-              href={installedAddonUrl}
+              href={installedHaAppUrl}
               className="inline-flex rounded-full bg-[#039dcc] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#0288d1]"
             >
-              Open HomeSignal add-on
+              Open HomeSignal app
             </a>
           )}
-          {addonsDashboardUrl && (
+          {haAppsDashboardUrl && (
             <a
-              href={addonsDashboardUrl}
+              href={haAppsDashboardUrl}
               className="inline-flex rounded-full border border-[#d6d6d6] px-5 py-2.5 text-sm font-medium text-[#039dcc] hover:bg-[#e1f5fe]"
             >
-              Open Home Assistant add-ons
+              Open Home Assistant apps
             </a>
           )}
         </div>
@@ -1470,7 +1616,7 @@ function AddonPairingFallbackOptions({
   );
 }
 
-function AddonPairingUrlRow({ label, value, copied, onCopy }) {
+function HaAppPairingUrlRow({ label, value, copied, onCopy }) {
   return (
     <div className="mt-5">
       <h3 className="text-sm font-medium text-[#616161]">{label}</h3>
@@ -1488,7 +1634,7 @@ function AddonPairingUrlRow({ label, value, copied, onCopy }) {
   );
 }
 
-function AddonPairingSpinner() {
+function HaAppPairingSpinner() {
   return (
     <div
       aria-hidden="true"
@@ -1497,7 +1643,7 @@ function AddonPairingSpinner() {
   );
 }
 
-function AddonPairingCheckIcon() {
+function HaAppPairingCheckIcon() {
   return (
     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white">
       <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1507,7 +1653,7 @@ function AddonPairingCheckIcon() {
   );
 }
 
-function AddonBridgeMockPage() {
+function HaAppBridgeMockPage() {
   const params = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
   const mode = params.get("mode") || "found";
   const responseDelayMs = Number(params.get("delay") || 0);
@@ -1517,16 +1663,16 @@ function AddonBridgeMockPage() {
 
     const onMessage = (event) => {
       if (!event.source || typeof event.data !== "object" || event.data === null) return;
-      if (event.data.type !== "homesignal.addon_bridge.ping") return;
+      if (event.data.type !== "homesignal.ha_app_bridge.ping") return;
       if (mode === "silent") return;
 
       const respond = () => {
         event.source.postMessage(
           {
-            type: "homesignal.addon_bridge.pong",
+            type: "homesignal.ha_app_bridge.pong",
             request_id: event.data.request_id,
             ok: mode !== "missing",
-            addon: {
+            app: {
               name: "HomeSignal",
               version: "0.1.3",
               bridge_version: 1,
@@ -1560,9 +1706,9 @@ function AddonBridgeMockPage() {
 
   return (
     <main className="min-h-screen bg-white px-6 py-8 font-['Roboto',Arial,sans-serif] text-[#212121]">
-      <h1 className="text-2xl font-normal">HomeSignal add-on bridge mock</h1>
+      <h1 className="text-2xl font-normal">HomeSignal app bridge mock</h1>
       <p className="mt-3 text-sm text-[#616161]">
-        This mock page answers the narrow HomeSignal add-on bridge postMessage ping.
+        This mock page answers the narrow HomeSignal app bridge postMessage ping.
       </p>
       <p className="mt-3 font-mono text-sm text-[#424242]">mode={mode}; delay={responseDelayMs}ms</p>
     </main>
@@ -1573,8 +1719,8 @@ export default function HomeSignalProductSkeleton() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/addon_pairing" element={<AddonPairingBridgePage />} />
-        <Route path={mockAddonBridgePath} element={<AddonBridgeMockPage />} />
+        <Route path="/ha_app_pairing" element={<HaAppPairingBridgePage />} />
+        <Route path={mockHaAppBridgePath} element={<HaAppBridgeMockPage />} />
         <Route path="/*" element={<HomeSignalProductApp />} />
       </Routes>
     </BrowserRouter>
@@ -1586,7 +1732,7 @@ function HomeSignalProductApp() {
   const [page, setPage] = useState(initialRoute.page);
   const [selectedSiteId, setSelectedSiteId] = useState(initialRoute.site);
   const [selectedDeviceId, setSelectedDeviceId] = useState(initialRoute.device);
-  const [addonScreen, setAddonScreen] = useState(initialRoute.addon);
+  const [haAppScreen, setHaAppScreen] = useState(initialRoute.haApp);
   const [showWiring, setShowWiring] = useState(initialRoute.wiring === "on");
   const [activeWiring, setActiveWiring] = useState(null);
   const lastRouteKeyRef = useRef(routeToHash(initialRoute));
@@ -1597,7 +1743,7 @@ function HomeSignalProductApp() {
       setPage(route.page);
       setSelectedSiteId(route.site);
       setSelectedDeviceId(route.device);
-      setAddonScreen(route.addon);
+      setHaAppScreen(route.haApp);
       setShowWiring(route.wiring === "on");
     };
 
@@ -1610,7 +1756,7 @@ function HomeSignalProductApp() {
       page,
       site: selectedSiteId,
       device: selectedDeviceId,
-      addon: addonScreen,
+      haApp: haAppScreen,
       wiring: showWiring ? "on" : "off",
     });
 
@@ -1622,7 +1768,7 @@ function HomeSignalProductApp() {
     if (window.location.hash !== nextHash) {
       window.history.pushState(null, "", nextHash);
     }
-  }, [page, selectedSiteId, selectedDeviceId, addonScreen, showWiring]);
+  }, [page, selectedSiteId, selectedDeviceId, haAppScreen, showWiring]);
 
   useEffect(() => {
     if (!showWiring) {
@@ -1686,11 +1832,11 @@ function HomeSignalProductApp() {
     return <AuthExperience page={page} setPage={setPage} />;
   }
 
-  if (page === "HA Add-on") {
+  if (page === "HA App") {
     return (
       <DataWiringContext.Provider value={showWiring}>
         <div className="min-h-screen bg-[#f5f5f5] px-3 py-4 pb-24 text-[#212121] sm:px-6 sm:py-6 sm:pb-6">
-          <HaAddon addonScreen={addonScreen} setAddonScreen={setAddonScreen} />
+          <HaApp haAppScreen={haAppScreen} setHaAppScreen={setHaAppScreen} />
         </div>
       </DataWiringContext.Provider>
     );
@@ -2095,12 +2241,12 @@ function Dashboard({ setPage, setSelectedSiteId, setSelectedDeviceId }) {
   const connectedDevices = devices.filter((device) => device.presence === "online").length;
   const needsAttentionDevices = devices.filter((device) => {
     const backup = backups.find((item) => item.device_id === device.id);
-    const addonBehind = device.latest_addon_version && device.addon_version !== device.latest_addon_version;
+    const haAppBehind = device.latest_ha_app_version && device.ha_app_version !== device.latest_ha_app_version;
     const haBehind = device.latest_home_assistant_version && device.home_assistant_version !== device.latest_home_assistant_version;
-    return device.presence !== "online" || backup?.status === "failed" || addonBehind || haBehind;
+    return device.presence !== "online" || backup?.status === "failed" || haAppBehind || haBehind;
   });
   const failedBackups = backups.filter((backup) => backup.status === "failed").length;
-  const addonDrift = devices.filter((device) => device.latest_addon_version && device.addon_version !== device.latest_addon_version).length;
+  const haAppDrift = devices.filter((device) => device.latest_ha_app_version && device.ha_app_version !== device.latest_ha_app_version).length;
   const attentionSiteCount = new Set(needsAttentionDevices.map((device) => device.site_id)).size;
   const attentionVerb = attentionSiteCount === 1 ? "needs" : "need";
   const attentionSites = sites
@@ -2126,10 +2272,10 @@ function Dashboard({ setPage, setSelectedSiteId, setSelectedDeviceId }) {
         });
       }
 
-      if (device?.latest_addon_version && device.addon_version !== device.latest_addon_version) {
+      if (device?.latest_ha_app_version && device.ha_app_version !== device.latest_ha_app_version) {
         issues.push({
-          label: "Add-on update available",
-          detail: `${device.addon_version} installed; ${device.latest_addon_version} available`,
+          label: "HomeSignal App Update available",
+          detail: `${device.ha_app_version} installed; ${device.latest_ha_app_version} available`,
           severity: "warning",
         });
       }
@@ -2175,12 +2321,12 @@ function Dashboard({ setPage, setSelectedSiteId, setSelectedDeviceId }) {
   });
   const visibleManagedDevices = managedDevices.filter((device) => {
     const backup = backups.find((item) => item.device_id === device.id);
-    const addonBehind = device.latest_addon_version && device.addon_version !== device.latest_addon_version;
+    const haAppBehind = device.latest_ha_app_version && device.ha_app_version !== device.latest_ha_app_version;
     const haBehind = device.latest_home_assistant_version && device.home_assistant_version !== device.latest_home_assistant_version;
 
     if (managedFilter === "online") return device.presence === "online";
     if (managedFilter === "backup") return backup?.status === "failed";
-    if (managedFilter === "updates") return addonBehind || haBehind;
+    if (managedFilter === "updates") return haAppBehind || haBehind;
     return true;
   });
   const topAttention = attentionSites[0];
@@ -2253,7 +2399,7 @@ function Dashboard({ setPage, setSelectedSiteId, setSelectedDeviceId }) {
         <DashboardSignal label="Online" value={`${connectedDevices}/${devices.length}`} wiringId="5" tone={connectedDevices === devices.length ? "success" : "warning"} onClick={() => setPage("Devices")} />
         <DashboardSignal label="Sites with issues" value={attentionSiteCount} wiringId="7" tone={attentionSiteCount > 0 ? "warning" : "success"} onClick={() => setPage("Alerts")} />
         <DashboardSignal label="Backup issues" value={failedBackups} wiringId="8" tone={failedBackups > 0 ? "warning" : "success"} onClick={() => setPage("Backups")} />
-        <DashboardSignal label="Add-on drift" value={addonDrift} wiringId="9" tone={addonDrift > 0 ? "warning" : "success"} onClick={() => setPage("Updates")} />
+        <DashboardSignal label="App drift" value={haAppDrift} wiringId="9" tone={haAppDrift > 0 ? "warning" : "success"} onClick={() => setPage("Updates")} />
         <DashboardSignal label="Email alerts" value="Soon" wiringId="10" tone="neutral" onClick={() => setPage("Alerts")} />
       </div>
 
@@ -2682,14 +2828,14 @@ function ManagedHomeAssistantRow({ device, site, customer, backup, onOpen }) {
   const showWiring = useContext(DataWiringContext);
   const connected = device.presence === "online";
   const backupOk = backup?.status === "succeeded";
-  const addonBehind = device.latest_addon_version && device.addon_version !== device.latest_addon_version;
+  const haAppBehind = device.latest_ha_app_version && device.ha_app_version !== device.latest_ha_app_version;
   const haBehind = device.latest_home_assistant_version && device.home_assistant_version !== device.latest_home_assistant_version;
-  const needsReview = !connected || !backupOk || addonBehind || haBehind;
+  const needsReview = !connected || !backupOk || haAppBehind || haBehind;
   const primaryStatus = connected ? "Connected" : "Disconnected";
   const statusDetail = `HA ${device.home_assistant_version} · ${backupOk ? "Backup current" : "Backup failed"}`;
   const secondaryDetails = [
     haBehind ? { id: "22", label: `Update ${device.latest_home_assistant_version}` } : null,
-    addonBehind ? { id: "32", label: "Add-on update" } : null,
+    haAppBehind ? { id: "32", label: "HomeSignal App Update" } : null,
   ].filter(Boolean);
 
   return (
@@ -2882,7 +3028,7 @@ function Sites({ selectedSiteId, setSelectedSiteId, setSelectedDeviceId, setPage
 
                   <div>
                     <div className="mb-1 text-xs font-semibold uppercase tracking-normal text-slate-400 lg:hidden">Home Assistant</div>
-                    {device ? <DeviceVersionSummary device={device} /> : <EmptySummary title="Not connected" detail="No add-on paired" />}
+                    {device ? <DeviceVersionSummary device={device} /> : <EmptySummary title="Not connected" detail="No app paired" />}
                   </div>
 
                   <div>
@@ -2918,7 +3064,7 @@ function Enrollment() {
 
   if (enrollmentState === "review" && activeSite) {
     return (
-      <Screen title="Review claim invite" subtitle="Confirm the site and customer before sharing a claim invite.">
+      <Screen title="Review pairing code" subtitle="Confirm the site and customer before sharing a pairing code.">
         <section className="rounded-md border border-slate-300 bg-white p-5">
           <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
             <div>
@@ -2934,7 +3080,7 @@ function Enrollment() {
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
-                <ReviewFact label="Claim invite" value="GUID-style code" />
+                <ReviewFact label="Pairing code" value="Secure pairing code" />
                 <ReviewFact label="Created by" value="Maya Patel" />
                 <ReviewFact label="Invite expiry" value="72 hours" />
                 <ReviewFact label="History transfer" value="No history transfer" warning />
@@ -2950,7 +3096,7 @@ function Enrollment() {
                 </div>
               </div>
               <p className="mt-3 text-xs leading-5 text-slate-600">
-                Creating the invite does not claim a device yet. The Home Assistant add-on must verify the invite details locally before it can confirm pairing.
+                Creating the invite does not claim a device yet. The Home Assistant app must verify the invite details locally before it can confirm pairing.
               </p>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
@@ -2958,7 +3104,7 @@ function Enrollment() {
                   onClick={() => setEnrollmentState("connected")}
                   className="rounded-md bg-[#03a9f4] px-4 py-2 text-sm font-medium text-white hover:bg-[#0288d1]"
                 >
-                  Create claim invite
+                  Create pairing code
                 </button>
                 <button
                   type="button"
@@ -2980,7 +3126,7 @@ function Enrollment() {
 
   if (enrollmentState === "connected" && activeSite) {
     return (
-      <Screen title="Claim invite created" subtitle="Share this code with the Home Assistant administrator.">
+      <Screen title="Pairing code created" subtitle="Share this code with the Home Assistant administrator.">
         <section className="rounded-md border border-slate-300 bg-white p-5">
           <div className="flex items-center gap-3">
             <PresenceDot state="online" />
@@ -2992,7 +3138,7 @@ function Enrollment() {
             </div>
           </div>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-            The add-on user can enter this GUID claim code locally, review the integrator/site/customer details, and then confirm pairing.
+            The app user can enter this pairing code locally, review the integrator/site/customer details, and then confirm pairing.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <TextButton>Open device</TextButton>
@@ -3010,7 +3156,7 @@ function Enrollment() {
   }
 
   return (
-    <Screen title="Create Home Assistant claim invite" subtitle="Choose a customer site, then create a GUID claim code for the local add-on user.">
+      <Screen title="Create Home Assistant pairing code" subtitle="Choose a customer site, then create a pairing code for the local app user.">
       <div className="mb-4 flex flex-wrap gap-2">
         {[
           ["choose", "Choose site"],
@@ -3080,13 +3226,13 @@ function Enrollment() {
             )}
 
             <p className="mt-4 max-w-xl text-sm leading-6 text-slate-600">
-              Create a claim invite for this site, then share the GUID code through HomeSignal email or your normal customer handoff. The add-on will verify the invite details locally before pairing.
+              Create a pairing code for this site, then share it through HomeSignal email or your normal customer handoff. The app will verify the pairing details locally before pairing.
             </p>
           </div>
 
           <div className="rounded-md border border-[#b3e5fc] bg-[#e1f5fe] p-4">
             <label className="text-sm font-semibold text-[#01579b]" htmlFor="claim-invite-code">
-              Claim invite code
+              Pairing code
             </label>
             <input
               id="claim-invite-code"
@@ -3129,8 +3275,8 @@ function Enrollment() {
 
       <Section title="What happens next">
         <div className="grid gap-3 md:grid-cols-3">
-          <Action label="Create site-bound claim invite" status="backed" source="device_claim_invites" />
-          <Action label="Local add-on verifies details" status="backed" source="device_claim_verifications" />
+          <Action label="Create site-bound pairing code" status="backed" source="device_claim_invites" />
+          <Action label="Local app verifies details" status="backed" source="device_claim_verifications" />
           <Action label="Confirm pairing locally" status="backed" source="devices + device_credentials" />
         </div>
       </Section>
@@ -3185,7 +3331,7 @@ function DeviceDetail({ device, site, setPage }) {
             {offline && <span className="text-sm text-slate-500">Last seen {device.last_seen_at}</span>}
           </div>
           <div className="mt-1 text-sm text-slate-600">
-            Home Assistant managed by HomeSignal add-on
+            Home Assistant managed by HomeSignal app
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -3202,7 +3348,7 @@ function DeviceDetail({ device, site, setPage }) {
           <Field label="Location" value={site?.location} status="backed" source="sites.location" />
           <VersionField label="Home Assistant version" current={device.home_assistant_version} latest={device.latest_home_assistant_version} source="device_latest_state + Home Assistant version catalog cache" />
           <VersionField label="Supervisor version" current={device.supervisor_version} latest={device.latest_supervisor_version} source="device_latest_state; no customer advisory unless catalog is defined" />
-          <VersionField label="HomeSignal add-on version" current={device.addon_version} latest={device.latest_addon_version} source="device_latest_state + homesignal_edge.update" />
+          <VersionField label="HomeSignal app version" current={device.ha_app_version} latest={device.latest_ha_app_version} source="device_latest_state + homesignal_edge.update" />
           <Field label="Storage health" value={device.storage_status} status="partial" source="reported latest-state field; exact derivation needs schema" />
           <Field label="Topology browser" value="Not exposed v0" status="future" source="topology_snapshots" />
         </Section>
@@ -3217,8 +3363,8 @@ function DeviceDetail({ device, site, setPage }) {
 
       <InternalNoteSection title="Advanced">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Action label="Request diagnostics" status="backed" source="Installed add-on consent + diagnostics guardrails" />
-          <Action label="Restart add-on" status="partial" source="Product decision: likely allowed, command spec not pinned" />
+          <Action label="Request diagnostics" status="backed" source="Installed app consent + diagnostics guardrails" />
+          <Action label="Restart app" status="partial" source="Product decision: likely allowed, command spec not pinned" />
           <Action label="Release device" status="backed" source="device lifecycle + audit_events" />
           <Action label="Delete / archive site" status="backed" source="Account / Site archive semantics" />
         </div>
@@ -3417,12 +3563,12 @@ function BackupFleetRow({ row, selected, onOpen }) {
 
 function Updates() {
   return (
-    <Screen title="Updates" subtitle="Review Home Assistant and HomeSignal add-on versions across managed sites.">
+    <Screen title="Updates" subtitle="Review Home Assistant and HomeSignal app versions across managed sites.">
       <section className="rounded-md border border-slate-300 bg-white">
         <div className="grid grid-cols-[minmax(230px,2fr)_minmax(160px,1fr)_minmax(160px,1fr)_minmax(130px,auto)] gap-6 border-b border-slate-200 px-5 py-3 text-xs font-semibold uppercase tracking-normal text-slate-500">
           <div>Home Assistant</div>
           <div>Home Assistant OS</div>
-          <div>HomeSignal add-on</div>
+          <div>HomeSignal app</div>
           <div>Action</div>
         </div>
 
@@ -3441,11 +3587,11 @@ function Updates() {
                 </div>
 
                 <UpdateCell current={device.home_assistant_version} latest={device.latest_home_assistant_version} />
-                <UpdateCell current={device.addon_version} latest={device.latest_addon_version} />
+                <UpdateCell current={device.ha_app_version} latest={device.latest_ha_app_version} />
 
                 <div className="flex items-start justify-end">
                   {device.home_assistant_version !== device.latest_home_assistant_version ||
-                  device.addon_version !== device.latest_addon_version ? (
+                  device.ha_app_version !== device.latest_ha_app_version ? (
                     <TextButton>Review</TextButton>
                   ) : (
                     <span className="text-sm text-slate-500">Current</span>
@@ -3460,12 +3606,12 @@ function Updates() {
       <TwoColumn>
         <InternalNoteSection title="Update policy">
           <Field label="Home Assistant updates" value="Shown for visibility; applied by local Home Assistant controls" status="partial" source="Supervisor/local update boundary" />
-          <Field label="HomeSignal add-on updates" value="Published through add-on repository" status="backed" source="release_channels + release_artifacts" />
+          <Field label="HomeSignal app updates" value="Published through app repository" status="backed" source="release_channels + release_artifacts" />
           <Field label="Unsupported versions" value="Visible to user before enforcement" status="partial" source="migration-strategy.md" />
         </InternalNoteSection>
 
         <InternalNoteSection title="Internal release state">
-          <Field label="Stable add-on release" value={edgeState.desired.update.desired_version} status="backed" source="homesignal_edge.update.desired_version" />
+          <Field label="Stable app release" value={edgeState.desired.update.desired_version} status="backed" source="homesignal_edge.update.desired_version" />
           <Field label="Release channel" value={edgeState.desired.update.channel} status="backed" source="homesignal_edge.update.channel" />
           <Field label="Rollout ID" value={edgeState.desired.update.rollout_id} status="backed" source="homesignal_edge.update.rollout_id" />
           <Field label="Binary install over IoT" value="Not allowed" status="missing" source="update-architecture.md" />
@@ -3614,7 +3760,7 @@ function Diagnostics() {
     <Screen title="Diagnostics" subtitle="Bounded support/debug capture, not arbitrary host access.">
       <TwoColumn>
         <InternalNoteSection title="Diagnostic capabilities">
-          <Action label="Collect add-on status" status="backed" source="local-cloud-trust-boundaries.md" />
+          <Action label="Collect app status" status="backed" source="local-cloud-trust-boundaries.md" />
           <Action label="Collect connectivity check" status="backed" source="local-cloud-trust-boundaries.md" />
           <Action label="Collect recent error excerpt" status="backed" source="5 KB bounded excerpt" />
           <Action label="Request debug bundle" status="conditional" source="Diagnostics/Debug flow must explicitly enable artifact upload" />
@@ -3738,7 +3884,7 @@ function Alerts({ setPage, setSelectedSiteId, setSelectedDeviceId }) {
             <h2 className="text-lg font-semibold">Email alerts</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
               Send operational alerts to the integrator team when a Home Assistant instance disconnects,
-              a backup fails, or the HomeSignal add-on needs attention.
+              a backup fails, or the HomeSignal app needs attention.
             </p>
           </div>
           <button
@@ -3969,88 +4115,187 @@ function Admin() {
   );
 }
 
-function HaAddon({ addonScreen, setAddonScreen }) {
+/*
+  Real app mount boundary
+
+  The HomeSignal Manager UI below is the candidate React surface for the
+  Home Assistant app ingress UI. Keep it local-app scoped: Status,
+  Pairing, Permissions, and Advanced. The current implementation still uses
+  mock data/state from this file; the real mount should replace those reads with
+  a narrow app API adapter documented in
+  design-docs/ha-app-ui-mount-plan.md.
+*/
+function HaApp({ haAppScreen, setHaAppScreen }) {
   const [pairingStage, setPairingStage] = useState("preflight");
   const [pairingCodeState, setPairingCodeState] = useState("success");
-  const [permissionPolicy, setPermissionPolicy] = useState(initialAddonPermissionPolicy);
-  const [savedPermissionPolicy, setSavedPermissionPolicy] = useState(initialAddonPermissionPolicy);
+  const [permissionPolicy, setPermissionPolicy] = useState(initialHaAppPermissionPolicy);
+  const [savedPermissionPolicy, setSavedPermissionPolicy] = useState(initialHaAppPermissionPolicy);
   const [permissionSavedAt, setPermissionSavedAt] = useState(null);
   const [autoPairStatus, setAutoPairStatus] = useState({ state: "idle", value: null });
-  const [mockAddonPairingState, setMockAddonPairingState] = useState(() => readMockAddonPairingState());
-  const [mockAddonBootstrapState, setMockAddonBootstrapState] = useState(() => readMockAddonBootstrapState());
+  const [mockHaAppPairingState, setMockHaAppPairingState] = useState(() => readMockHaAppPairingState());
+  const [mockHaAppBootstrapState, setMockHaAppBootstrapState] = useState(() => readMockHaAppBootstrapState());
   const [bootstrapViewState, setBootstrapViewState] = useState("checking");
+  const [claimInviteCode, setClaimInviteCode] = useState(() => readAutoPairingContext()?.pairing_id || haAppState.claim_invite_code);
+  const [claimStep, setClaimStep] = useState("guid");
+  const [claimLookup, setClaimLookup] = useState({ state: "idle", result: null });
   const autoPairIframeRef = useRef(null);
   const autoPairRequestIdRef = useRef(null);
   const autoPairCompletedRef = useRef(false);
-  const initialStatusState = Object.prototype.hasOwnProperty.call(addonStatusStates, addonScreen) ? addonScreen : "onboarding";
-  const [addonConnectionState, setAddonConnectionState] = useState(initialStatusState);
-  const isPairingScreen = addonScreen === "pairing";
-  const isPermissionsScreen = addonScreen === "permissions";
-  const isAdvancedScreen = addonScreen === "advanced";
-  const statusState = Object.prototype.hasOwnProperty.call(addonStatusStates, addonScreen) ? addonScreen : addonConnectionState;
+  const bootstrapHardStoppedRef = useRef(false);
+  const initialStatusState = Object.prototype.hasOwnProperty.call(haAppStatusStates, haAppScreen) ? haAppScreen : "onboarding";
+  const [haAppConnectionState, setHaAppConnectionState] = useState(initialStatusState);
+  const isPairingScreen = haAppScreen === "pairing";
+  const isPermissionsScreen = haAppScreen === "permissions";
+  const isAdvancedScreen = haAppScreen === "advanced";
+  const statusState = Object.prototype.hasOwnProperty.call(haAppStatusStates, haAppScreen) ? haAppScreen : haAppConnectionState;
   const headerStatusState = pairingStage === "connected" ? "healthy" : statusState;
-  const connectionStatus = addonShellStatus[headerStatusState];
-  const activeAddonPage = isPairingScreen ? "pairing" : isPermissionsScreen ? "permissions" : isAdvancedScreen ? "advanced" : "status";
-  const displayVersion = getAddonDisplayVersion(headerStatusState);
-  const navigateAddonPage = (key) => setAddonScreen(key === "status" ? headerStatusState : key);
-  const shouldRunBootstrap = !mockAddonPairingState.has_ever_paired && !mockAddonBootstrapState.has_run_bootstrap;
+  const connectionStatus = haAppShellStatus[headerStatusState];
+  const activeHaAppPage = isPairingScreen ? "pairing" : isPermissionsScreen ? "permissions" : isAdvancedScreen ? "advanced" : "status";
+  const displayVersion = getHaAppDisplayVersion(headerStatusState);
+  const navigateHaAppPage = (key) => setHaAppScreen(key === "status" ? headerStatusState : key);
+  const shouldRunBootstrap = !mockHaAppPairingState.has_ever_paired && !mockHaAppBootstrapState.has_run_bootstrap;
   const shouldLoadAutoPairingBridge = shouldRunBootstrap;
+  const shouldShowBootstrapScreen = shouldRunBootstrap && bootstrapViewState === "checking";
+  const lookupClaimRequest = (nextCode = claimInviteCode) => {
+    setPairingStage("code");
+    setClaimStep("approve");
+    setPairingCodeState("loading");
+    setClaimLookup({ state: "loading", result: null });
+
+    window.setTimeout(() => {
+      const result = mockClaimRequestForGuid(nextCode);
+      setClaimLookup({ state: result.ok ? "ready" : "error", result });
+      setPairingCodeState(result.ok ? "success" : "rate_limited");
+    }, 450);
+  };
+
+  const setMockPairingStep = (key) => {
+    if (key === "preflight") {
+      setPairingStage("preflight");
+      setPairingCodeState("success");
+      setClaimStep("guid");
+      setClaimLookup({ state: "idle", result: null });
+      setHaAppConnectionState("onboarding");
+      return;
+    }
+
+    if (key === "code") {
+      const result = mockClaimRequestForGuid(claimInviteCode);
+      setPairingStage("code");
+      setPairingCodeState(result.ok ? "success" : "rate_limited");
+      setClaimStep("approve");
+      setClaimLookup({ state: result.ok ? "ready" : "error", result });
+      setHaAppConnectionState("onboarding");
+      return;
+    }
+
+    if (key === "connected") {
+      setPairingStage("connected");
+      setClaimStep("success");
+      setHaAppConnectionState("healthy");
+    }
+  };
+
+  const setMockInviteCondition = (key) => {
+    setPairingStage("code");
+    setClaimStep("approve");
+
+    if (key === "loading") {
+      setPairingCodeState("loading");
+      setClaimLookup({ state: "loading", result: null });
+      return;
+    }
+
+    if (key === "success") {
+      const result = mockClaimRequestForGuid(claimInviteCode || "mock-good");
+      setPairingCodeState("success");
+      setClaimLookup({ state: "ready", result: result.ok ? result : mockClaimRequestForGuid("mock-good") });
+      return;
+    }
+
+    if (key === "rate_limited") {
+      const result = mockClaimRequestForGuid("mock-network");
+      setPairingCodeState("rate_limited");
+      setClaimLookup({ state: "error", result });
+    }
+  };
 
   useEffect(() => {
-    if (Object.prototype.hasOwnProperty.call(addonStatusStates, addonScreen)) {
-      setAddonConnectionState(addonScreen);
+    if (Object.prototype.hasOwnProperty.call(haAppStatusStates, haAppScreen)) {
+      setHaAppConnectionState(haAppScreen);
     }
-  }, [addonScreen]);
+  }, [haAppScreen]);
+
+  useEffect(() => {
+    if (!shouldRunBootstrap) {
+      return undefined;
+    }
+
+    bootstrapHardStoppedRef.current = false;
+
+    const visibleTimer = window.setTimeout(() => {
+      setBootstrapViewState((current) => (current === "checking" ? "complete" : current));
+    }, haAppBootstrapLoadingMaxMs);
+
+    const hardStopTimer = window.setTimeout(() => {
+      bootstrapHardStoppedRef.current = true;
+
+      if (!autoPairCompletedRef.current) {
+        setAutoPairStatus({ state: "idle", value: null });
+        const nextBootstrap = writeMockHaAppBootstrapState({
+          has_run_bootstrap: true,
+          last_checked_at: new Date().toISOString(),
+        });
+        setMockHaAppBootstrapState(nextBootstrap);
+        setBootstrapViewState("complete");
+      }
+    }, haAppBootstrapHardStopMs);
+
+    return () => {
+      window.clearTimeout(visibleTimer);
+      window.clearTimeout(hardStopTimer);
+    };
+  }, [shouldRunBootstrap]);
 
   useEffect(() => {
     const onMessage = (event) => {
       const frameWindow = autoPairIframeRef.current?.contentWindow;
       if (!frameWindow || event.source !== frameWindow || typeof event.data !== "object" || event.data === null) return;
+      if (bootstrapHardStoppedRef.current) return;
 
       if (event.data.type === "homesignal.auto_pairing.value" && event.data.request_id === autoPairRequestIdRef.current) {
         if (!event.data.ok) {
           if (!autoPairCompletedRef.current) {
             setAutoPairStatus({ state: "idle", value: null });
-            const nextBootstrap = writeMockAddonBootstrapState({
-              has_run_bootstrap: true,
-              last_checked_at: new Date().toISOString(),
-            });
-            setMockAddonBootstrapState(nextBootstrap);
-            setBootstrapViewState("complete");
           }
           return;
         }
 
         autoPairCompletedRef.current = true;
-        setMockAddonPairingState(writeMockAddonPairingState({
-          has_ever_paired: true,
-          last_pairing_id: event.data.value.pairing_id,
-          paired_at: new Date().toISOString(),
-        }));
-        setMockAddonBootstrapState(writeMockAddonBootstrapState({
+        setMockHaAppBootstrapState(writeMockHaAppBootstrapState({
           has_run_bootstrap: true,
           last_checked_at: new Date().toISOString(),
         }));
-        setBootstrapViewState("paired");
-        setAutoPairStatus({ state: "paired", value: event.data.value });
-        setPairingStage("connected");
-        setAddonConnectionState("healthy");
-        setAddonScreen("healthy");
-
-        frameWindow.postMessage(
-          { type: "homesignal.auto_pairing.remove", request_id: `remove_${Date.now()}` },
-          window.location.origin
-        );
+        setBootstrapViewState("found");
+        setAutoPairStatus({ state: "found", value: event.data.value });
+        setClaimInviteCode(event.data.value.pairing_id);
+        setClaimStep("guid");
+        setClaimLookup({ state: "idle", result: null });
+        setPairingStage("preflight");
+        setPairingCodeState("success");
+        setHaAppConnectionState("onboarding");
+        setHaAppScreen("pairing");
       }
     };
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [setAddonScreen]);
+  }, [setHaAppScreen]);
 
   const requestAutoPairingContext = () => {
     if (!shouldLoadAutoPairingBridge) return;
     if (autoPairCompletedRef.current) return;
+    if (bootstrapHardStoppedRef.current) return;
 
     const frameWindow = autoPairIframeRef.current?.contentWindow;
     if (!frameWindow) return;
@@ -4069,9 +4314,9 @@ function HaAddon({ addonScreen, setAddonScreen }) {
     window.setTimeout(requestAutoPairingContext, 700);
   };
 
-  if (shouldRunBootstrap) {
+  if (shouldShowBootstrapScreen) {
     return (
-      <div className="mx-auto max-w-6xl font-['Roboto',Arial,sans-serif]">
+      <div className="mx-auto max-w-[960px] font-['Roboto',Arial,sans-serif]">
         <iframe
           ref={autoPairIframeRef}
           title="HomeSignal auto-pairing bridge"
@@ -4080,19 +4325,22 @@ function HaAddon({ addonScreen, setAddonScreen }) {
           className="hidden"
         />
         <HaMockControls
-          mockAddonPairingState={mockAddonPairingState}
-          mockAddonBootstrapState={mockAddonBootstrapState}
+          mockHaAppPairingState={mockHaAppPairingState}
+          mockHaAppBootstrapState={mockHaAppBootstrapState}
           resetLocalMockState={() => {
-            clearMockAddonLocalState();
+            clearMockHaAppLocalState();
             autoPairCompletedRef.current = false;
             setPairingStage("preflight");
             setPairingCodeState("success");
-            setMockAddonPairingState(readMockAddonPairingState());
-            setMockAddonBootstrapState(readMockAddonBootstrapState());
+            setClaimInviteCode(haAppState.claim_invite_code);
+            setClaimStep("guid");
+            setClaimLookup({ state: "idle", result: null });
+            setMockHaAppPairingState(readMockHaAppPairingState());
+            setMockHaAppBootstrapState(readMockHaAppBootstrapState());
             setBootstrapViewState("checking");
             setAutoPairStatus({ state: "idle", value: null });
-            setAddonConnectionState("onboarding");
-            setAddonScreen("onboarding");
+            setHaAppConnectionState("onboarding");
+            setHaAppScreen("onboarding");
           }}
         />
         <HaBootstrapRunOnceView state={bootstrapViewState} />
@@ -4101,21 +4349,33 @@ function HaAddon({ addonScreen, setAddonScreen }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl font-['Roboto',Arial,sans-serif]">
+    <div className="mx-auto max-w-[960px] font-['Roboto',Arial,sans-serif]">
+      {shouldLoadAutoPairingBridge && (
+        <iframe
+          ref={autoPairIframeRef}
+          title="HomeSignal auto-pairing bridge"
+          src={autoPairingBridgePath}
+          onLoad={requestAutoPairingContextAfterBridgeLoad}
+          className="hidden"
+        />
+      )}
       <HaMockControls
-        mockAddonPairingState={mockAddonPairingState}
-        mockAddonBootstrapState={mockAddonBootstrapState}
+        mockHaAppPairingState={mockHaAppPairingState}
+        mockHaAppBootstrapState={mockHaAppBootstrapState}
         resetLocalMockState={() => {
-          clearMockAddonLocalState();
+          clearMockHaAppLocalState();
           autoPairCompletedRef.current = false;
           setPairingStage("preflight");
           setPairingCodeState("success");
-          setMockAddonPairingState(readMockAddonPairingState());
-          setMockAddonBootstrapState(readMockAddonBootstrapState());
+          setClaimInviteCode(haAppState.claim_invite_code);
+          setClaimStep("guid");
+          setClaimLookup({ state: "idle", result: null });
+          setMockHaAppPairingState(readMockHaAppPairingState());
+          setMockHaAppBootstrapState(readMockHaAppBootstrapState());
           setBootstrapViewState("checking");
           setAutoPairStatus({ state: "idle", value: null });
-          setAddonConnectionState("onboarding");
-          setAddonScreen("onboarding");
+          setHaAppConnectionState("onboarding");
+          setHaAppScreen("onboarding");
         }}
       >
         <div className="flex flex-wrap gap-2">
@@ -4128,7 +4388,7 @@ function HaAddon({ addonScreen, setAddonScreen }) {
             <button
               key={key}
               type="button"
-              onClick={() => navigateAddonPage(key)}
+              onClick={() => navigateHaAppPage(key)}
               className={`rounded-md border px-3 py-1.5 text-sm ${
                 (key === "pairing" ? isPairingScreen : key === "permissions" ? isPermissionsScreen : key === "advanced" ? isAdvancedScreen : !isPairingScreen && !isPermissionsScreen && !isAdvancedScreen)
                   ? "border-amber-400 bg-amber-50 text-slate-900"
@@ -4144,11 +4404,11 @@ function HaAddon({ addonScreen, setAddonScreen }) {
           <div className="mt-3 border-t border-slate-200 pt-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-slate-500">Status state</div>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(addonStatusStates).map(([key, item]) => (
+              {Object.entries(haAppStatusStates).map(([key, item]) => (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setAddonScreen(key)}
+                  onClick={() => setHaAppScreen(key)}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     statusState === key
                       ? "border-[#03a9f4] bg-sky-50 text-slate-950"
@@ -4168,13 +4428,13 @@ function HaAddon({ addonScreen, setAddonScreen }) {
             <div className="flex flex-wrap gap-2">
               {[
                 ["preflight", "Setup"],
-                ["code", "Invite"],
+                    ["code", "Approve"],
                 ["connected", "Paired"],
               ].map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setPairingStage(key)}
+                  onClick={() => setMockPairingStep(key)}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     pairingStage === key
                       ? "border-[#03a9f4] bg-sky-50 text-slate-950"
@@ -4187,17 +4447,17 @@ function HaAddon({ addonScreen, setAddonScreen }) {
             </div>
             {pairingStage === "code" && (
               <div className="mt-3 border-t border-slate-200 pt-3">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-slate-500">Invite condition</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-slate-500">Review condition</div>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    ["loading", "Verifying"],
-                    ["success", "Verified"],
+                    ["loading", "Loading"],
+                    ["success", "Loaded"],
                     ["rate_limited", "Rate limited"],
                   ].map(([key, label]) => (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setPairingCodeState(key)}
+                      onClick={() => setMockInviteCondition(key)}
                       className={`rounded-md border px-3 py-1.5 text-sm ${
                         pairingCodeState === key
                           ? "border-[#03a9f4] bg-sky-50 text-slate-950"
@@ -4214,27 +4474,31 @@ function HaAddon({ addonScreen, setAddonScreen }) {
         )}
       </HaMockControls>
 
-      <div className="overflow-hidden rounded-xl border border-[#e0e0e0] bg-white text-[#212121]">
-        <div className="px-5 pb-4 pt-5 sm:px-8 sm:pt-7">
-          <h1 className="text-3xl font-normal tracking-normal text-[#212121] sm:text-4xl">HomeSignal Manager</h1>
-          <p className="mt-3 text-base leading-6 text-[#616161]">Current version: {displayVersion}</p>
-          <div className="mt-3 flex items-center gap-2">
-            <HaStateDot tone={connectionStatus.tone} size="sm" />
-            <span className="text-sm font-medium text-slate-600">{connectionStatus.label}</span>
+      <div className="bg-white text-[#212121]">
+        <div className="px-5 py-4 sm:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-normal tracking-normal text-[#212121] sm:text-3xl">HomeSignal Manager</h1>
+              <span className="text-sm leading-5 text-[#616161]">Version {displayVersion}</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-[#e0e0e0] px-3 py-1.5">
+              <HaStateDot tone={connectionStatus.tone} size="sm" />
+              <span className="text-sm font-medium text-[#616161]">{connectionStatus.label}</span>
+            </div>
           </div>
         </div>
-        <HaAddonNav
-          activePage={activeAddonPage}
-          onNavigate={navigateAddonPage}
+        <HaAppNav
+          activePage={activeHaAppPage}
+          onNavigate={navigateHaAppPage}
           variant="top"
         />
-        <HaAddonShell>
+        <HaAppShell>
           {!isPairingScreen && !isPermissionsScreen && !isAdvancedScreen && (
             <HaStatusPage
               statusState={statusState}
-              permissionPolicy={permissionPolicy}
+              permissionPolicy={savedPermissionPolicy}
               autoPairStatus={autoPairStatus}
-              setAddonScreen={setAddonScreen}
+              setHaAppScreen={setHaAppScreen}
             />
           )}
           {isPairingScreen && (
@@ -4242,10 +4506,29 @@ function HaAddon({ addonScreen, setAddonScreen }) {
               pairingStage={pairingStage}
               pairingCodeState={pairingCodeState}
               permissionPolicy={permissionPolicy}
+              claimInviteCode={claimInviteCode}
+              setClaimInviteCode={setClaimInviteCode}
+              claimStep={claimStep}
+              setClaimStep={setClaimStep}
+              claimLookup={claimLookup}
+              setClaimLookup={setClaimLookup}
+              lookupClaimRequest={lookupClaimRequest}
               setPermissionPolicy={setPermissionPolicy}
               setPairingStage={setPairingStage}
               setPairingCodeState={setPairingCodeState}
-              setAddonScreen={setAddonScreen}
+              setHaAppScreen={setHaAppScreen}
+              onPairingCommitted={(pairingId) => {
+                setMockHaAppPairingState(writeMockHaAppPairingState({
+                  has_ever_paired: true,
+                  last_pairing_id: pairingId,
+                  paired_at: new Date().toISOString(),
+                }));
+                setSavedPermissionPolicy(permissionPolicy);
+                setPermissionSavedAt("Just now");
+                removeAutoPairingContext();
+                setAutoPairStatus({ state: "paired", value: null });
+                setHaAppConnectionState("healthy");
+              }}
             />
           )}
           {isPermissionsScreen && (
@@ -4260,11 +4543,11 @@ function HaAddon({ addonScreen, setAddonScreen }) {
               }}
             />
           )}
-          {isAdvancedScreen && <HaAdvancedPage setAddonScreen={setAddonScreen} />}
-        </HaAddonShell>
-        <HaAddonNav
-          activePage={activeAddonPage}
-          onNavigate={navigateAddonPage}
+          {isAdvancedScreen && <HaAdvancedPage setHaAppScreen={setHaAppScreen} />}
+        </HaAppShell>
+        <HaAppNav
+          activePage={activeHaAppPage}
+          onNavigate={navigateHaAppPage}
           variant="bottom"
         />
       </div>
@@ -4272,24 +4555,24 @@ function HaAddon({ addonScreen, setAddonScreen }) {
   );
 }
 
-function HaMockControls({ mockAddonPairingState, mockAddonBootstrapState, resetLocalMockState, children }) {
+function HaMockControls({ mockHaAppPairingState, mockHaAppBootstrapState, resetLocalMockState, children }) {
   return (
     <div className="mb-4 rounded-md border border-slate-300 bg-white px-4 py-3 shadow-sm">
       <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-slate-500">Mock page</div>
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-        <span>Mock plugin local storage:</span>
+        <span>Mock app local storage:</span>
         <span className="rounded bg-slate-100 px-2 py-1 font-mono">
-          has_ever_paired={String(mockAddonPairingState.has_ever_paired)}
+          has_ever_paired={String(mockHaAppPairingState.has_ever_paired)}
         </span>
         <span className="rounded bg-slate-100 px-2 py-1 font-mono">
-          has_run_bootstrap={String(mockAddonBootstrapState.has_run_bootstrap)}
+          has_run_bootstrap={String(mockHaAppBootstrapState.has_run_bootstrap)}
         </span>
         <button
           type="button"
           onClick={resetLocalMockState}
           className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50"
         >
-          Flush mock plugin state
+          Flush mock app state
         </button>
       </div>
       {children}
@@ -4298,15 +4581,15 @@ function HaMockControls({ mockAddonPairingState, mockAddonBootstrapState, resetL
 }
 
 function HaBootstrapRunOnceView({ state }) {
-  const isPaired = state === "paired";
+  const isFound = state === "found";
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#e0e0e0] bg-white text-[#212121]">
       <div className="mx-auto max-w-xl px-6 py-16 text-center">
         <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ${
-          isPaired ? "bg-emerald-700 text-white" : "bg-[#e1f5fe] text-[#039dcc]"
+          isFound ? "bg-emerald-700 text-white" : "bg-[#e1f5fe] text-[#039dcc]"
         }`}>
-          {isPaired ? (
+          {isFound ? (
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 6 9 17l-5-5" />
             </svg>
@@ -4316,13 +4599,8 @@ function HaBootstrapRunOnceView({ state }) {
         </div>
         <h1 className="mt-5 text-3xl font-normal tracking-normal text-[#212121]">HomeSignal Manager</h1>
         <div className="mt-4 text-base font-medium text-[#212121]">
-          {isPaired ? "Claim invite context found" : "Checking for claim invite context"}
+          {isFound ? "Pairing code found" : "Loading..."}
         </div>
-        <p className="mt-2 text-sm leading-6 text-[#616161]">
-          {isPaired
-            ? "HomeSignal found a short-lived browser claim invite context and is finishing setup."
-            : "This first run checks the HomeSignal portal bridge for a short-lived claim invite context. If none is available, the normal manager page will open."}
-        </p>
       </div>
     </div>
   );
@@ -4331,47 +4609,47 @@ function HaBootstrapRunOnceView({ state }) {
 const statusPageConfig = {
   onboarding: {
     updateAgeDays: 2,
-    healthItems: addonHealthSnapshot,
+    healthItems: haAppHealthSnapshot,
     lastReported: "Not sent yet",
     showManagedBy: false,
     attention: {
       tone: "info",
       title: "Ready to pair with HomeSignal",
-      body: "This add-on has not been paired before. Pair it with the HomeSignal site you manage to create the durable site association.",
+      body: "This app has not been paired before. Pair it with the HomeSignal site you manage to create the durable site association.",
     },
-    actions: ["pair", "portal"],
+    actions: ["pair", "create_account"],
   },
   healthy: {
-    healthItems: addonHealthySnapshot,
+    healthItems: haAppHealthySnapshot,
     lastReported: "May 14, 2026, 11:59 AM",
     showManagedBy: true,
     showOperationalSections: true,
     updateRows: [
-      ["Add-on version", "0.1.4", "Ready"],
+      ["App version", "0.1.4", "Ready"],
       ["Auto-update", "On", "Ready"],
       ["Start on boot", "Auto", "Ready"],
       ["Watchdog", "On", "Ready"],
     ],
   },
   disconnected: {
-    healthItems: addonDisconnectedSnapshot,
+    healthItems: haAppDisconnectedSnapshot,
     lastReported: "May 14, 2026, 11:12 AM",
     showManagedBy: true,
     attention: {
       tone: "warning",
       title: "Connection needs attention",
-      body: "This add-on was previously paired with HomeSignal, but it is not currently reporting. Last connected May 14, 2026, 11:12 AM.",
+      body: "This app was previously paired with HomeSignal, but it is not currently reporting. Last connected May 14, 2026, 11:12 AM.",
     },
     actions: ["retry", "portal"],
   },
   outdated: {
     updateAgeDays: 6,
-    healthItems: addonOutdatedSnapshot,
+    healthItems: haAppOutdatedSnapshot,
     lastReported: "May 14, 2026, 11:59 AM",
     showManagedBy: true,
     showOperationalSections: true,
     updateRows: [
-      ["Add-on version", "0.1.3", "Needs attention"],
+      ["App version", "0.1.3", "Needs attention"],
       ["Auto-update", "Check in Home Assistant", "Needs attention"],
       ["Start on boot", "Auto", "Ready"],
       ["Watchdog", "On", "Ready"],
@@ -4379,25 +4657,25 @@ const statusPageConfig = {
   },
 };
 
-function getAddonDisplayVersion(statusState) {
+function getHaAppDisplayVersion(statusState) {
   return statusState === "healthy" || statusState === "disconnected"
-    ? haAddonState.latest_addon_version
-    : haAddonState.addon_version;
+    ? haAppState.latest_ha_app_version
+    : haAppState.ha_app_version;
 }
 
-function HaStatusPage({ statusState, permissionPolicy, autoPairStatus, setAddonScreen }) {
+function HaStatusPage({ statusState, permissionPolicy, autoPairStatus, setHaAppScreen }) {
   const config = statusPageConfig[statusState] ?? statusPageConfig.onboarding;
 
   return (
     <div className="p-4">
-      <HaCard className="min-w-0">
+      <div className="max-w-2xl">
         <HaAutoPairStatus status={autoPairStatus} />
         {config.updateAgeDays && <HaUpdateNotice updateAgeDays={config.updateAgeDays} />}
         {config.attention && (
           <HaStatusAttention
             attention={config.attention}
             actions={config.actions}
-            setAddonScreen={setAddonScreen}
+            setHaAppScreen={setHaAppScreen}
           />
         )}
         {config.showManagedBy && <HaManagedBySection />}
@@ -4407,7 +4685,7 @@ function HaStatusPage({ statusState, permissionPolicy, autoPairStatus, setAddonS
         </div>
 
         {config.showOperationalSections && <HaStatusOperationalSections permissionPolicy={permissionPolicy} />}
-      </HaCard>
+      </div>
     </div>
   );
 }
@@ -4422,18 +4700,18 @@ function HaAutoPairStatus({ status }) {
       isPaired ? "border-emerald-300 bg-emerald-50 text-emerald-950" : "border-sky-200 bg-sky-50 text-slate-800"
     }`}>
       <div className="font-semibold">
-        {isPaired ? "Browser claim invite context received" : "Checking browser claim invite context"}
+        {isPaired ? "Browser pairing code received" : "Checking browser pairing code"}
       </div>
       <p className={`mt-1 leading-6 ${isPaired ? "text-emerald-900" : "text-slate-600"}`}>
         {isPaired
           ? `Auto-pairing completed with ${status.value?.pairing_id}. The temporary browser context was removed.`
-          : "The add-on is checking the HomeSignal portal bridge for a short-lived claim invite context."}
+          : "The app is checking the HomeSignal portal bridge for a short-lived pairing code."}
       </p>
     </div>
   );
 }
 
-function HaStatusAttention({ attention, actions = [], setAddonScreen }) {
+function HaStatusAttention({ attention, actions = [], setHaAppScreen }) {
   const toneClass = attention.tone === "warning" ? "border-amber-300 bg-amber-50 text-amber-950" : "border-sky-200 bg-sky-50 text-slate-800";
   const bodyClass = attention.tone === "warning" ? "text-amber-900" : "text-slate-600";
 
@@ -4444,11 +4722,12 @@ function HaStatusAttention({ attention, actions = [], setAddonScreen }) {
       {actions.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {actions.includes("pair") && (
-            <HaButton type="button" onClick={() => setAddonScreen("pairing")} size="lg">
+            <HaButton type="button" onClick={() => setHaAppScreen("pairing")} size="lg">
               Pair with HomeSignal
             </HaButton>
           )}
           {actions.includes("retry") && <HaButton type="button">Retry pairing</HaButton>}
+          {actions.includes("create_account") && <HomeSignalAccountActionLink />}
           {actions.includes("portal") && <HomeSignalPortalActionLink />}
         </div>
       )}
@@ -4457,24 +4736,98 @@ function HaStatusAttention({ attention, actions = [], setAddonScreen }) {
 }
 
 function HaManagedBySection() {
+  return <HaManagedByCard className="mb-5" />;
+}
+
+function HaManagedByCard({
+  className = "",
+  title = "Managed by",
+  organization = haAppState.organization,
+  site = haAppState.site,
+  deviceId = haAppState.device_id,
+  requesterName,
+  requesterEmail,
+  pairingCode,
+}) {
   return (
-    <div className="mb-5">
-      <div className="mb-2 text-sm font-semibold text-slate-800">Managed by</div>
-      <div className="rounded-lg border border-[#e0e0e0] bg-[#f7f8fa] px-5 py-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+    <div className={className}>
+      <div className="rounded-lg border border-[#e0e0e0] bg-[#f7f8fa] px-5 py-5">
+        <div className="text-sm font-semibold text-[#212121]">{title}</div>
+        <div className="mt-4">
           <div>
             <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">Organization</div>
-            <div className="mt-1 text-sm font-medium text-[#212121]">{haAddonState.organization}</div>
+            <div className="mt-1 text-base font-medium text-[#212121]">{organization}</div>
+            {requesterName && (
+              <div className="mt-1 text-sm text-[#616161]">
+                Requested by <span className="font-medium text-[#212121]">{requesterName}</span>
+                {requesterEmail && <span className="break-all"> ({requesterEmail})</span>}
+              </div>
+            )}
           </div>
+        </div>
+        <div className="mt-5 grid gap-4 border-t border-[#eeeeee] pt-4 sm:grid-cols-2">
           <div>
             <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">Site</div>
-            <div className="mt-1 text-sm font-medium text-[#212121]">{haAddonState.site}</div>
+            <div className="mt-1 text-base font-medium text-[#212121]">{site}</div>
           </div>
           <div>
             <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">Device ID</div>
-            <div className="mt-1 font-mono text-sm text-[#212121]">{haAddonState.device_id}</div>
+            <div className="mt-1 font-mono text-sm text-[#212121]">{deviceId}</div>
           </div>
         </div>
+        {pairingCode && (
+          <div className="mt-4 border-t border-[#e0e0e0] pt-3">
+            <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">Pairing code</div>
+            <div className="mt-1 break-all font-mono text-sm font-medium text-[#212121]">{pairingCode}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HaPairingRequestSummary({ claimDetails }) {
+  return (
+    <div className="px-1">
+      <div className="text-sm font-semibold text-[#212121]">Request to manage this Home Assistant</div>
+      <div className="mt-4">
+        <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">From</div>
+        <div className="mt-1 text-base font-medium tracking-normal text-[#212121]">{claimDetails.organization}</div>
+        <div className="mt-1 text-sm text-[#616161]">
+          Requested by <span className="font-medium text-[#212121]">{claimDetails.requested_by}</span>
+          <span className="break-all"> ({claimDetails.requester_email})</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HaApprovalPanel({ claimDetails, pairingCode }) {
+  return (
+    <div className="mt-5 border-t border-[#eeeeee] px-1 pt-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">Site</div>
+          <div className="mt-1 text-base font-medium text-[#212121]">{claimDetails.site}</div>
+        </div>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">Pairing code</div>
+          <div className="mt-1 break-all font-mono text-sm font-medium text-[#212121]">{pairingCode}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HaRemoteManagementApproval({ permissionPolicy, setPermissionPolicy }) {
+  return (
+    <div className="mt-5 rounded-lg border border-[#e0e0e0] bg-white px-5 py-5">
+      <div className="text-sm font-semibold text-[#212121]">Set remote access permissions</div>
+      <p className="mt-1 text-sm leading-6 text-slate-600">
+        Choose the permissions to approve for this pairing.
+      </p>
+      <div className="mt-3">
+        <HaPermissionSwitchList compact unframed value={permissionPolicy} onChange={setPermissionPolicy} />
       </div>
     </div>
   );
@@ -4482,9 +4835,9 @@ function HaManagedBySection() {
 
 function HaStatusOperationalSections({ permissionPolicy }) {
   return (
-    <div>
-      <div className="mb-2 text-sm font-semibold text-slate-800">Remote management</div>
-      <div className="rounded-lg border border-[#e0e0e0] bg-white px-4 py-1">
+    <div className="rounded-lg border border-[#e0e0e0] bg-white">
+      <div className="border-b border-[#eeeeee] px-4 py-3 text-sm font-semibold text-[#212121]">Remote management</div>
+      <div className="px-4 py-1">
         <HaRemoteManagementSummary permissionPolicy={permissionPolicy} />
         <HaStatusRow label="Last command" value="None pending" status="Ready" />
         <HaStatusRow label="Policy" value="Current" status="Ready" />
@@ -4496,8 +4849,8 @@ function HaStatusOperationalSections({ permissionPolicy }) {
 function HaRemoteManagementSummary({ permissionPolicy }) {
   const fullControl = permissionPolicy?.accessMode !== "custom";
   const permissions = fullControl
-    ? fullControlPermissionChips
-    : addonControlPolicy
+    ? fullControlPermissionLabels
+    : haAppControlPolicy
         .filter((control) => permissionPolicy?.granularControls?.[control.key])
         .map((control) => control.label);
 
@@ -4527,7 +4880,7 @@ function HaUpdateNotice({ updateAgeDays }) {
   // - At/over the stale threshold: replace it with "Action required" because auto-update is probably not working.
   // Do not render both together; we want users to fix auto-update instead of only performing a one-off manual update.
   const [showInstructions, setShowInstructions] = useState(false);
-  const isStale = updateAgeDays >= haAddonState.stale_update_threshold_days;
+  const isStale = updateAgeDays >= haAppState.stale_update_threshold_days;
 
   if (isStale) {
     return (
@@ -4537,7 +4890,7 @@ function HaUpdateNotice({ updateAgeDays }) {
         </div>
         <div className="text-base font-semibold text-slate-950">HomeSignal auto-update may not be working</div>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-700">
-          This add-on has been out of date for <span className="underline decoration-slate-600 underline-offset-2">{updateAgeDays} days</span>. For best performance and compatibility with Home Assistant,
+          This app has been out of date for <span className="underline decoration-slate-600 underline-offset-2">{updateAgeDays} days</span>. To keep the HomeSignal app compatible with HomeSignal cloud features and supported Home Assistant versions,
           auto-update should be enabled.
         </p>
         <HaUpdateInstructions tone="serious" />
@@ -4554,13 +4907,13 @@ function HaUpdateNotice({ updateAgeDays }) {
             <div className="text-sm font-semibold text-amber-950">Update available</div>
           </div>
           <p className="mt-1 text-sm leading-6 text-amber-900">
-            HomeSignal add-on {haAddonState.latest_addon_version} is available. You are running {haAddonState.addon_version}.
+            HomeSignal app {haAppState.latest_ha_app_version} is available. You are running {haAppState.ha_app_version}.
             <button
               type="button"
               onClick={() => setShowInstructions((value) => !value)}
               className="ml-1 underline decoration-amber-700 underline-offset-2 hover:text-amber-950"
             >
-              Add-on update instructions
+              HomeSignal App Update instructions
             </button>
           </p>
         </div>
@@ -4575,9 +4928,9 @@ function HaUpdateInstructions({ tone = "advisory" }) {
 
   return (
     <div className={`mt-3 rounded-md border p-3 ${tone === "serious" ? "border-slate-300 bg-slate-50" : "border-amber-200 bg-white/70"}`}>
-      <div className={`text-sm font-semibold ${textClass}`}>Add-on update instructions</div>
+      <div className={`text-sm font-semibold ${textClass}`}>HomeSignal App Update instructions</div>
       <ul className={`mt-2 list-disc space-y-1 pl-5 text-sm leading-6 ${textClass}`}>
-        <li>Open the Home Assistant add-on settings page.</li>
+        <li>Open the Home Assistant app settings page.</li>
         <li>
           Verify these settings:
           <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -4586,57 +4939,56 @@ function HaUpdateInstructions({ tone = "advisory" }) {
             <li className="grid grid-cols-[120px_auto] gap-2"><span>Start on boot:</span><strong>enabled</strong></li>
           </ul>
         </li>
-        <li>Install the latest HomeSignal add-on version if an update is available.</li>
+        <li>Install the latest HomeSignal app version if an update is available.</li>
       </ul>
       <HaButton type="button" className="mt-3">
-        Go to add-on settings
+        Go to app settings
       </HaButton>
     </div>
   );
 }
 
-function HaHealthStatus({ items = addonHealthSnapshot, lastReported }) {
+function HaHealthStatus({ items = haAppHealthSnapshot, lastReported }) {
   const [showDetails, setShowDetails] = useState(false);
-  const summaryOrder = ["HomeSignal agent", "Cloud paths", "Cloud access", "Telemetry", "Account status", "Add-on update"];
+  const summaryOrder = ["HomeSignal agent", "Cloud paths", "Cloud access", "Telemetry", "Account status", "HomeSignal App Update"];
   const summaryItems = summaryOrder
     .map((label) => items.find(([itemLabel]) => itemLabel === label))
     .filter(Boolean)
     .slice(0, 4);
+  const reportLabel = lastReported === "Not sent yet" ? "Not reporting yet" : `Last sent ${lastReported}`;
 
   return (
-    <div>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-sm font-semibold text-slate-800">Health status</div>
-        <div className="text-xs text-[#757575]">Last sent on {lastReported}</div>
+    <div className="rounded-lg border border-[#e0e0e0] bg-white">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[#eeeeee] px-4 py-3">
+        <div className="text-sm font-semibold text-[#212121]">Health status</div>
+        <div className="text-xs text-[#757575]">{reportLabel}</div>
       </div>
-      <div className="rounded-lg border border-[#e0e0e0] bg-white">
-        <div className="grid gap-0 divide-y divide-[#eeeeee] px-4 py-1 md:grid-cols-2 md:divide-x md:divide-y-0">
-          {summaryItems.map(([label, value, detail, tone]) => (
-            <HaHealthSummaryItem key={label} label={label} value={value} detail={detail} tone={tone} />
+      <div className="divide-y divide-[#f1f1f1] px-4">
+        {summaryItems.map(([label, value, detail, tone]) => (
+          <HaHealthSummaryItem key={label} label={label} value={value} detail={detail} tone={tone} />
+        ))}
+      </div>
+      <div className="border-t border-[#eeeeee] px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setShowDetails((value) => !value)}
+          className="text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
+        >
+          {showDetails ? "Hide details" : "Show details"}
+        </button>
+      </div>
+      {showDetails && (
+        <div className="border-t border-[#eeeeee] px-4">
+          {items.map(([label, value, detail, tone]) => (
+            <HaHealthLine key={label} label={label} value={value} detail={detail} tone={tone} />
           ))}
         </div>
-        <div className="border-t border-[#eeeeee] px-4 py-3">
-          <button
-            type="button"
-            onClick={() => setShowDetails((value) => !value)}
-            className="text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
-          >
-            {showDetails ? "Hide details" : "Show details"}
-          </button>
-        </div>
-        {showDetails && (
-          <div className="border-t border-[#eeeeee] px-4 py-1">
-            {items.map(([label, value, detail, tone]) => (
-              <HaHealthLine key={label} label={label} value={value} detail={detail} tone={tone} />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
 
-function HaHealthSnapshot({ items = addonHealthSnapshot }) {
+function HaHealthSnapshot({ items = haAppHealthSnapshot }) {
   return (
     <div className="rounded-lg border border-[#e0e0e0] bg-white px-4 py-1">
       {items.map(([label, value, detail, tone]) => (
@@ -4648,132 +5000,196 @@ function HaHealthSnapshot({ items = addonHealthSnapshot }) {
 
 function HaHealthSummaryItem({ label, value, detail, tone }) {
   const color = tone === "warning" ? "bg-amber-500" : tone === "neutral" ? "bg-slate-400" : "bg-emerald-500";
-  const text = tone === "warning" ? "text-amber-700" : tone === "neutral" ? "text-slate-600" : "text-emerald-700";
 
   return (
-    <div className="min-w-0 px-0 py-3 md:px-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-[#212121]">
-        <span className={`inline-block h-2.5 w-2.5 rounded-full ${color}`} />
-        {label}
+    <div className="grid max-w-4xl gap-x-4 gap-y-0.5 py-2.5 text-sm sm:grid-cols-[190px_minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex min-w-0 items-center gap-2 font-medium text-[#212121]">
+        <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
+        <span className="truncate">{label}</span>
       </div>
-      <div className={`mt-1 text-sm font-semibold ${text}`}>{value}</div>
-      <div className="mt-0.5 truncate text-xs text-slate-500">{detail}</div>
+      <div className="min-w-0 pl-5 text-xs leading-4 text-[#616161] sm:pl-0">{detail}</div>
+      <HaHealthStatusChip value={value} />
     </div>
   );
 }
 
 function HaHealthLine({ label, value, detail, tone }) {
   const color = tone === "warning" ? "bg-amber-500" : tone === "neutral" ? "bg-slate-400" : "bg-emerald-500";
-  const text = tone === "warning" ? "text-amber-700" : tone === "neutral" ? "text-slate-600" : "text-emerald-700";
 
   return (
-    <div className="grid grid-cols-[minmax(170px,0.7fr)_1fr] gap-4 border-b border-[#eeeeee] py-3 text-sm last:border-b-0">
-      <div className="flex items-center gap-2 font-medium text-[#212121]">
-        <span className={`inline-block h-2.5 w-2.5 rounded-full ${color}`} />
-        {label}
+    <div className="grid max-w-4xl gap-x-4 gap-y-0.5 border-b border-[#f1f1f1] py-2.5 text-sm last:border-b-0 sm:grid-cols-[190px_minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex min-w-0 items-center gap-2 font-medium text-[#212121]">
+        <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
+        <span className="truncate">{label}</span>
       </div>
-      <div className="min-w-0">
-        <div className={`font-semibold ${text}`}>{value}</div>
-        <div className="text-xs text-slate-500">{detail}</div>
-      </div>
+      <div className="min-w-0 pl-5 text-xs leading-4 text-[#616161] sm:pl-0">{detail}</div>
+      <HaHealthStatusChip value={value} />
     </div>
   );
 }
 
-function HaPairing({ pairingStage, pairingCodeState, permissionPolicy, setPermissionPolicy, setPairingStage, setPairingCodeState, setAddonScreen }) {
-  const [claimInviteCode, setClaimInviteCode] = useState(haAddonState.claim_invite_code);
+function HaHealthStatusChip({ value }) {
+  return (
+    <div className="pl-5 sm:pl-0 sm:text-right">
+      <span className="inline-flex rounded-full bg-[#f7f8fa] px-2.5 py-0.5 text-xs font-medium text-[#757575]">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function mockClaimRequestForGuid(guid) {
+  const value = guid.trim();
+
+  if (!value) {
+    return {
+      ok: false,
+      tone: "warning",
+      title: "Enter a pairing code",
+      message: "Paste the pairing code from the HomeSignal pairing page or email.",
+    };
+  }
+
+  if (value.length < 8) {
+    return {
+      ok: false,
+      tone: "warning",
+      title: "Pairing code is incomplete",
+      message: "Check the pairing code and try again.",
+    };
+  }
+
+  const errorFixtures = {
+    "mock-expired": ["Pairing request expired", "Ask HomeSignal to create a new pairing request."],
+    "mock-used": ["Pairing request already used", "This pairing code has already been claimed by another app."],
+    "mock-cancelled": ["Pairing request cancelled", "The HomeSignal user cancelled this pairing request."],
+    "mock-network": ["Could not reach HomeSignal", "Check internet access from this app, then try again."],
+    "mock-claimed": ["This app is already paired", "Unpair this app before claiming it again."],
+  };
+
+  if (errorFixtures[value]) {
+    return {
+      ok: false,
+      tone: value === "mock-network" ? "warning" : "danger",
+      title: errorFixtures[value][0],
+      message: errorFixtures[value][1],
+    };
+  }
+
+  if (value.startsWith("mock-missing")) {
+    return {
+      ok: false,
+      tone: "warning",
+      title: "Pairing request not found",
+      message: "The pairing code was not found or is no longer active.",
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      guid: value,
+      claim_request_id: "claim_req_01J00000000000000000000000",
+      organization: haAppState.organization,
+      site: haAppState.site,
+      customer_name: haAppState.customer_name,
+      service_address: haAppState.service_address,
+      requested_by: haAppState.claim_creator_name,
+      requester_email: haAppState.claim_creator_email,
+      created_at: "May 16, 2026, 10:42 AM",
+      expires_at: "May 16, 2026, 12:42 PM",
+      local_ha_app_version: haAppState.ha_app_version,
+      local_home_assistant_version: "2026.5.1",
+      local_supervisor_version: "2026.05.0",
+    },
+  };
+}
+
+function HaPairing({
+  pairingStage,
+  pairingCodeState,
+  permissionPolicy,
+  claimInviteCode,
+  setClaimInviteCode,
+  claimStep,
+  setClaimStep,
+  claimLookup,
+  setClaimLookup,
+  lookupClaimRequest,
+  setPermissionPolicy,
+  setPairingStage,
+  setPairingCodeState,
+  setHaAppScreen,
+  onPairingCommitted,
+}) {
+  const browserPairingContext = readAutoPairingContext();
+  const browserGuid = browserPairingContext?.pairing_id || "";
   const [showUnpairConfirm, setShowUnpairConfirm] = useState(false);
-  const showClaimInvite = pairingStage === "code";
-  const isRateLimited = showClaimInvite && pairingCodeState === "rate_limited";
-  const hasVerifiedInvite = showClaimInvite && pairingCodeState === "success";
-  const pairingHeaderTone = isRateLimited ? "warning" : pairingStage === "connected" ? "success" : "active";
-  const pairingHeaderLabel =
-    pairingStage === "preflight"
-      ? "Pairing setup"
-      : pairingStage === "code"
-        ? "Claim invite"
-        : "Paired";
-  const pairingTitle = pairingStage === "code" ? "Claim invite" : "Pairing setup";
-  const pairingHelper =
-    hasVerifiedInvite ? (
-      <>
-        Confirm these details before this Home Assistant add-on is paired.
-      </>
-    ) : pairingStage === "preflight" ? (
-      <>
-        Choose remote management access, then enter the GUID claim invite code from your HomeSignal email or integrator.
-      </>
-    ) : showClaimInvite ? (
-      "Enter the claim invite code to verify who is requesting access."
-    ) : (
-      null
-    );
+
+  const claimDetails = claimLookup.result?.ok ? claimLookup.result.value : null;
+
+  useEffect(() => {
+    if (!browserGuid || claimStep !== "guid" || claimLookup.state !== "idle") return;
+    setClaimInviteCode(browserGuid);
+    lookupClaimRequest(browserGuid);
+  }, [browserGuid, claimLookup.state, claimStep, lookupClaimRequest, setClaimInviteCode]);
 
   if (pairingStage === "connected") {
     return (
       <div className="p-4">
-        <HaCard className="min-w-0">
-          <div className="mx-auto max-w-2xl">
-            <div className="text-center">
-              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-700 text-white">
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-              </div>
-              <div className="mt-3 text-2xl font-medium tracking-normal text-[#212121]">Successfully paired with HomeSignal</div>
+        <div className="max-w-2xl">
+          <div className="mb-6">
+            <HaPairingProgress stage={pairingStage} codeState={pairingCodeState} claimStep={claimStep} />
+          </div>
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center gap-2 text-2xl font-medium tracking-normal text-[#212121]">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+              <span>Paired with HomeSignal</span>
             </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This app is ready for approved remote management.
+            </p>
+          </div>
 
-            <div className="mt-6 rounded-lg border border-[#e0e0e0] bg-[#f7f8fa] px-5 py-6 text-center">
-              <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">Managed by</div>
-              <div className="mt-2 text-lg font-semibold tracking-normal text-[#212121]">{haAddonState.organization}</div>
-              <div className="mt-1 text-base text-[#616161]">{haAddonState.site}</div>
-            </div>
-
-            <div className="mt-5 rounded-lg border border-[#e0e0e0] bg-white px-5 py-4">
-              <div className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[160px_1fr]">
-                <div className="text-[#757575]">Invite created by</div>
-                <div className="font-medium text-[#212121]">{haAddonState.claim_creator_name}</div>
-                <div className="text-[#757575]">Email</div>
-                <div className="break-all font-medium text-[#212121]">{haAddonState.claim_creator_email}</div>
-                <div className="text-[#757575]">Device ID</div>
-                <div className="font-mono text-[#212121]">{haAddonState.device_id}</div>
-              </div>
-            </div>
-            <div className="mt-10 flex flex-col items-center justify-center gap-4">
-              <HaButton type="button" onClick={() => setAddonScreen("healthy")}>
-                Return to add-on status page
-              </HaButton>
-              <div className="flex flex-col items-center gap-5 pt-2">
-                <a
-                  href="https://app.homesignal.local"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
-                >
-                  Open HomeSignal portal
-                  <ExternalLinkIcon className="ml-1 h-3.5 w-3.5" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setAddonScreen("advanced")}
-                  className="text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
-                >
-                  Advanced options
-                </button>
-              </div>
+          <HaManagedByCard
+            className="mt-6"
+            requesterName={haAppState.claim_creator_name}
+            requesterEmail={haAppState.claim_creator_email}
+          />
+          <div className="mt-10 flex flex-col items-center justify-center gap-4">
+            <HaButton type="button" onClick={() => setHaAppScreen("healthy")}>
+              Return to app status page
+            </HaButton>
+            <div className="flex flex-col items-center gap-5 pt-2">
+              <a
+                href="https://app.homesignal.local"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
+              >
+                Open HomeSignal portal
+                <ExternalLinkIcon className="ml-1 h-3.5 w-3.5" />
+              </a>
+              <button
+                type="button"
+                onClick={() => setHaAppScreen("advanced")}
+                className="text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
+              >
+                Advanced options
+              </button>
             </div>
           </div>
-        </HaCard>
+        </div>
         {showUnpairConfirm && (
           <HaConfirmDialog
             title="Unpair from HomeSignal?"
-            message="This will remove the HomeSignal cloud association for this Home Assistant add-on. Local Home Assistant will keep running."
+            message="This will remove the HomeSignal cloud association for this Home Assistant app. Local Home Assistant will keep running."
             confirmLabel="Yes, unpair"
             cancelLabel="No, keep paired"
             onCancel={() => setShowUnpairConfirm(false)}
             onConfirm={() => {
               setShowUnpairConfirm(false);
-              setAddonScreen("onboarding");
+              setHaAppScreen("onboarding");
             }}
           />
         )}
@@ -4782,164 +5198,289 @@ function HaPairing({ pairingStage, pairingCodeState, permissionPolicy, setPermis
   }
 
   return (
-    <div className="grid gap-4 p-4 xl:grid-cols-[1fr_360px]">
-      <HaCard className="min-w-0">
-        <div className="mb-5">
-          <div className="mb-2 text-sm font-medium text-slate-600">{pairingHeaderLabel}</div>
-          <h2 className="text-2xl font-medium tracking-normal text-[#212121]">{pairingTitle}</h2>
-          {pairingHelper && (
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              {pairingHelper}
-            </p>
+    <div className="p-4">
+      <div className="max-w-2xl">
+        <div className="mb-6">
+          <HaPairingProgress stage={pairingStage} codeState={pairingCodeState} claimStep={claimStep} />
+        </div>
+        <HaClaimFrame
+          step={claimStep}
+          browserGuid={browserGuid}
+          claimInviteCode={claimInviteCode}
+          setClaimInviteCode={setClaimInviteCode}
+          claimLookup={claimLookup}
+          claimDetails={claimDetails}
+          permissionPolicy={permissionPolicy}
+          setPermissionPolicy={setPermissionPolicy}
+          onUseBrowserGuid={() => {
+            setClaimInviteCode(browserGuid);
+            lookupClaimRequest(browserGuid);
+          }}
+          onSelectMockCase={(value) => {
+            setClaimInviteCode(value);
+            lookupClaimRequest(value);
+          }}
+          onLookup={() => lookupClaimRequest()}
+          onBackToGuid={() => {
+            setClaimStep("guid");
+            setPairingStage("preflight");
+            setPairingCodeState("success");
+          }}
+          onCommitPairing={() => {
+            onPairingCommitted(claimDetails?.guid || claimInviteCode.trim());
+            setClaimStep("success");
+            setPairingStage("connected");
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function HaClaimFrame({
+  step,
+  browserGuid,
+  claimInviteCode,
+  setClaimInviteCode,
+  claimLookup,
+  claimDetails,
+  permissionPolicy,
+  setPermissionPolicy,
+  onUseBrowserGuid,
+  onSelectMockCase,
+  onLookup,
+  onBackToGuid,
+  onCommitPairing,
+}) {
+  return (
+    <div>
+      {step === "guid" && (
+        <HaClaimGuidStep
+          browserGuid={browserGuid}
+          claimInviteCode={claimInviteCode}
+          setClaimInviteCode={setClaimInviteCode}
+          onUseBrowserGuid={onUseBrowserGuid}
+          onSelectMockCase={onSelectMockCase}
+          onLookup={onLookup}
+        />
+      )}
+
+      {step === "approve" && (
+        <HaClaimReviewStep
+          claimLookup={claimLookup}
+          claimDetails={claimDetails}
+          claimInviteCode={claimInviteCode}
+          permissionPolicy={permissionPolicy}
+          setPermissionPolicy={setPermissionPolicy}
+          onBackToGuid={onBackToGuid}
+          onCommitPairing={onCommitPairing}
+        />
+      )}
+    </div>
+  );
+}
+
+function HaClaimGuidStep({ browserGuid, claimInviteCode, setClaimInviteCode, onUseBrowserGuid, onSelectMockCase, onLookup }) {
+  return (
+    <div>
+      <div className="rounded-lg border border-[#e0e0e0] bg-[#f7f8fa] px-5 py-5">
+        {browserGuid && (
+          <p className="mb-4 text-sm leading-6 text-[#616161]">
+            A pairing code is available from this browser. Review the request before pairing.
+          </p>
+        )}
+
+        <label className="block text-sm font-semibold text-[#212121]" htmlFor="claim-guid">
+          Pairing code
+        </label>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+          <input
+            id="claim-guid"
+            type="text"
+            value={claimInviteCode}
+            onChange={(event) => setClaimInviteCode(event.target.value)}
+            spellCheck={false}
+            autoCapitalize="none"
+            autoComplete="off"
+            className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-3 font-mono text-sm font-semibold tracking-normal text-slate-950"
+            aria-label="Pairing code"
+          />
+          <HaButton type="button" onClick={onLookup} disabled={!claimInviteCode.trim()}>
+            Continue
+          </HaButton>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {browserGuid && (
+            <button
+              type="button"
+              onClick={onUseBrowserGuid}
+              className="text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
+            >
+              Use browser pairing code
+            </button>
           )}
         </div>
+      </div>
 
-        {pairingStage === "preflight" && (
-          <>
-            <div>
-              <div className="mb-2">
-                <div className="text-sm font-semibold text-slate-800">Remote management access</div>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Choose how much remote management this add-on should allow after pairing. The add-on enforces this locally.
-                </p>
-              </div>
-              <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
-                <HaPermissionSwitchList compact value={permissionPolicy} onChange={setPermissionPolicy} />
-              </div>
-            </div>
-
-            <div className="mt-5 border-t border-slate-200 pt-4">
-              <HaButton
-                type="button"
-                onClick={() => {
-                  setPairingCodeState("success");
-                  setPairingStage("code");
-                }}
-              >
-                Continue to claim invite
-              </HaButton>
-            </div>
-          </>
-        )}
-
-        {showClaimInvite && (
-          <HaPairingCodePanel
-            codeState={pairingCodeState}
-            claimInviteCode={claimInviteCode}
-            setClaimInviteCode={setClaimInviteCode}
-            setPairingCodeState={setPairingCodeState}
-            setPairingStage={setPairingStage}
-          />
-        )}
-
-      </HaCard>
-
-      <HaCard title="Pairing setup status">
-        <HaPairingProgress stage={pairingStage} codeState={pairingCodeState} />
-      </HaCard>
+      <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50/70 px-4 py-3">
+        <summary className="cursor-pointer select-none text-xs font-medium text-slate-500">Mock cases</summary>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {["mock-good", "mock-expired", "mock-used", "mock-network", "mock-claimed"].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onSelectMockCase(value)}
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-mono text-xs text-slate-600 hover:bg-slate-100"
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }
 
-function HaPairingCodePanel({ codeState, claimInviteCode, setClaimInviteCode, setPairingCodeState, setPairingStage }) {
-  return (
-    <div className="rounded-md border border-slate-300 bg-slate-50 p-5">
-      <div className="text-xs font-medium uppercase tracking-normal text-slate-500">Claim invite code</div>
-
-      {codeState === "loading" && (
-        <div className="mt-4 flex items-center gap-3">
+function HaClaimReviewStep({
+  claimLookup,
+  claimDetails,
+  claimInviteCode,
+  permissionPolicy,
+  setPermissionPolicy,
+  onBackToGuid,
+  onCommitPairing,
+}) {
+  if (claimLookup.state === "loading") {
+    return (
+      <div className="rounded-lg border border-[#e0e0e0] bg-[#f7f8fa] px-5 py-5">
+        <div className="flex items-center gap-3">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-[#039dcc]" />
-          <div className="text-sm font-semibold text-slate-900">Verifying invite</div>
+          <div className="text-sm font-semibold text-slate-900">Fetching pairing request</div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {codeState === "rate_limited" && (
-        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3">
-          <div className="text-sm font-semibold text-amber-950">Unable to verify invite</div>
-          <p className="mt-1 text-sm leading-6 text-amber-900">Try again in a few minutes.</p>
+  if (claimLookup.state === "error") {
+    return (
+      <div className="rounded-lg border border-[#e0e0e0] bg-[#f7f8fa] px-5 py-5">
+        <HaClaimAlert
+          tone={claimLookup.result?.tone || "warning"}
+          title={claimLookup.result?.title || "Unable to load pairing request"}
+          message={claimLookup.result?.message || "Try another pairing code."}
+        />
+        <div className="mt-4">
+          <HaButton type="button" variant="secondary" onClick={onBackToGuid}>
+            Enter a different pairing code
+          </HaButton>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {codeState === "success" && (
-        <>
-          <div className="mt-3 flex flex-col gap-3">
-            <input
-              type="text"
-              value={claimInviteCode}
-              onChange={(event) => setClaimInviteCode(event.target.value)}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 font-mono text-sm font-semibold tracking-normal text-slate-950"
-              aria-label="Claim invite code"
-            />
-          </div>
-          <div className="mt-4 rounded-md border border-emerald-200 bg-white p-4">
-            <div className="text-sm font-semibold text-slate-900">Invite verified</div>
-            <div className="mt-3 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[130px_1fr]">
-              <div className="text-slate-500">Integrator</div>
-              <div className="font-medium text-slate-900">{haAddonState.organization}</div>
-              <div className="text-slate-500">Created by</div>
-              <div className="font-medium text-slate-900">{haAddonState.claim_creator_name}</div>
-              <div className="text-slate-500">Site</div>
-              <div className="font-medium text-slate-900">{haAddonState.site}</div>
-              <div className="text-slate-500">Customer</div>
-              <div className="font-medium text-slate-900">{haAddonState.customer_name}</div>
-              <div className="text-slate-500">Address</div>
-              <div className="font-medium text-slate-900">{haAddonState.service_address}</div>
-            </div>
-            <div className="mt-3 text-xs text-slate-500">{haAddonState.claim_invite_expires_at}. Confirmation token expires {haAddonState.claim_verification_expires_at.toLowerCase()}.</div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <HaButton type="button" onClick={() => setPairingStage("connected")}>
-              Confirm and pair
-            </HaButton>
-            <HaButton type="button" variant="secondary" onClick={() => setPairingCodeState("loading")}>
-              Verify again
-            </HaButton>
-          </div>
-        </>
-      )}
+  if (!claimDetails) return null;
+
+  return (
+    <div>
+      <div className="rounded-lg border border-[#e0e0e0] bg-[#f7f8fa] px-5 py-5">
+        <HaPairingRequestSummary claimDetails={claimDetails} />
+        <HaApprovalPanel
+          claimDetails={claimDetails}
+          pairingCode={claimDetails.guid || claimInviteCode}
+        />
+      </div>
+      <HaRemoteManagementApproval permissionPolicy={permissionPolicy} setPermissionPolicy={setPermissionPolicy} />
+
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <HaButton type="button" onClick={onCommitPairing}>
+          Approve and Pair
+        </HaButton>
+        <HaButton type="button" variant="secondary" onClick={onBackToGuid}>
+          Use a different pairing code
+        </HaButton>
+      </div>
     </div>
   );
 }
 
-function HaPairingProgress({ stage, codeState }) {
+function HaClaimAlert({ tone, title, message }) {
+  const classes =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+      : tone === "danger"
+        ? "border-red-200 bg-red-50 text-red-950"
+        : tone === "warning"
+          ? "border-amber-300 bg-amber-50 text-amber-950"
+          : "border-slate-200 bg-white text-slate-900";
+
+  return (
+    <div className={`rounded-md border px-4 py-3 ${classes}`}>
+      <div className="text-sm font-semibold">{title}</div>
+      <p className="mt-1 text-sm leading-6 opacity-85">{message}</p>
+    </div>
+  );
+}
+
+function HaPairingProgress({ stage, codeState, claimStep }) {
   const steps = [
-    ["preflight", "Pairing setup"],
-    ["code", "Verify claim invite"],
+    ["guid", "Enter code"],
+    ["approve", "Approve pairing"],
     ["connected", "Paired"],
   ];
-  const currentIndex = stage === "connected" ? 2 : stage === "code" ? 1 : 0;
+  const currentIndex =
+    stage === "connected"
+      ? 2
+      : claimStep === "approve"
+        ? 1
+        : 0;
+  const stepStates = steps.map(([key, label], index) => {
+    const complete = stage === "connected" || index < currentIndex;
+    const active = stage !== "connected" && index === currentIndex;
+    const status =
+      key === "approve" && claimStep === "approve" && codeState === "loading"
+        ? "Fetching"
+        : key === "approve" && claimStep === "approve" && codeState === "rate_limited"
+          ? "Needs attention"
+          : key === "connected" && active
+            ? `Paired with ${haAppState.organization}`
+            : complete
+              ? "Complete"
+              : active
+                ? "Current"
+                : "Pending";
+    const markerClass = complete
+      ? "border border-[#039dcc] bg-[#039dcc] text-white"
+      : active
+        ? "border-2 border-[#039dcc] bg-white text-[#0277bd]"
+        : "border border-[#e0e0e0] bg-white text-[#757575]";
+
+    return { key, label, index, complete, active, status, markerClass };
+  });
 
   return (
-    <div className="space-y-1">
-      {steps.map(([key, label], index) => {
-        const complete = index < currentIndex;
-        const active = index === currentIndex;
-        const status =
-          key === "code" && stage === "code" && codeState === "loading"
-            ? "Verifying"
-            : key === "code" && stage === "code" && codeState === "rate_limited"
-              ? "Rate limited"
-              : key === "connected" && active
-                ? `Paired with ${haAddonState.organization}`
-                : complete
-                  ? "Complete"
-                  : active
-                    ? "Current"
-                  : "Pending";
-        const markerClass = complete || active ? "border-[#039dcc] text-[#0277bd]" : "border-[#e0e0e0] text-[#757575]";
-
-        return (
-          <div key={key} className="flex items-start gap-3 border-b border-[#eeeeee] py-3 last:border-b-0">
-            <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-medium ${markerClass}`}>
-              {index + 1}
+    <div className="px-1 py-2">
+      <div className="grid grid-cols-[minmax(70px,1fr)_minmax(36px,0.8fr)_minmax(90px,1fr)_minmax(36px,0.8fr)_minmax(70px,1fr)] items-start">
+        {stepStates.map((step, index) => (
+          <Fragment key={step.key}>
+            <div className="min-w-0 text-center">
+              <div className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${step.markerClass}`}>
+                {step.complete ? (
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                ) : (
+                  step.index + 1
+                )}
+              </div>
+              <div className={`mt-2 truncate text-sm font-medium ${step.active || step.complete ? "text-[#212121]" : "text-[#616161]"}`}>{step.label}</div>
+              {step.active && <div className="mt-0.5 truncate text-xs text-[#757575]">{step.status}</div>}
             </div>
-            <div>
-              <div className="text-sm font-medium text-[#212121]">{label}</div>
-              <div className="text-xs text-[#757575]">{status}</div>
-            </div>
-          </div>
-        );
-      })}
+            {index < stepStates.length - 1 && (
+              <div className={`mt-[14px] h-px ${index < currentIndex ? "bg-[#039dcc]" : "bg-[#e0e0e0]"}`} />
+            )}
+          </Fragment>
+        ))}
+      </div>
     </div>
   );
 }
@@ -4967,16 +5508,12 @@ function HaPermissionsPage({ permissionPolicy, savedPermissionPolicy, permission
   const hasUnsavedChanges = JSON.stringify(permissionPolicy) !== JSON.stringify(savedPermissionPolicy);
 
   return (
-    <div className="grid gap-4 p-4 xl:grid-cols-[1fr_360px]">
-      <HaCard className="min-w-0">
-        <div className="mb-5">
-          <div className="mb-2 text-sm font-medium text-slate-600">Permission policy</div>
-          <h2 className="text-2xl font-medium tracking-normal text-[#212121]">Allow HomeSignal to request approved actions</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Home Assistant grants the installed add-on local capability. These switches decide which concrete HomeSignal actions cloud users may request.
-          </p>
-        </div>
-
+    <div className="grid max-w-2xl gap-4 p-4">
+      <HaCard
+        className="min-w-0"
+        title="Remote access permissions"
+        subtitle="Choose which HomeSignal actions cloud users may request. Home Assistant grants the installed app local capability; this policy narrows what the cloud is allowed to use."
+      >
         <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
           <HaPermissionSwitchList value={permissionPolicy} onChange={setPermissionPolicy} />
         </div>
@@ -4991,11 +5528,11 @@ function HaPermissionsPage({ permissionPolicy, savedPermissionPolicy, permission
         </div>
       </HaCard>
 
-      <HaCard title="Local-only boundary">
+      <HaCard title="Unavailable permissions">
         <p className="mb-3 text-sm leading-6 text-slate-600">
           Future or unsupported controls stay locked until a specific command contract exists. Cloud users cannot silently grant themselves more access later.
         </p>
-        {unsupportedAddonControls.map(([label, detail]) => (
+        {unsupportedHaAppControls.map(([label, detail]) => (
           <HaChecklistItem key={label} label={label} state="unavailable" detail={detail} />
         ))}
       </HaCard>
@@ -5003,75 +5540,248 @@ function HaPermissionsPage({ permissionPolicy, savedPermissionPolicy, permission
   );
 }
 
-function HaAdvancedPage({ setAddonScreen }) {
+function HaAdvancedPage({ setHaAppScreen }) {
   const [showUnpairConfirm, setShowUnpairConfirm] = useState(false);
+  const [logCaptureLevel, setLogCaptureLevel] = useState(haAppLogStorageSummary.capture_level);
 
   return (
     <div className="p-4">
-      <HaCard className="min-w-0">
-        <div className="mb-5">
-          <div className="mb-2 text-sm font-medium text-slate-600">Advanced</div>
-          <h2 className="text-2xl font-medium tracking-normal text-[#212121]">Advanced options</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Repair or remove the HomeSignal association for this Home Assistant add-on.
-          </p>
+      <div className="rounded-lg border border-[#e0e0e0] bg-white px-5 py-4">
+        <div className="text-sm font-semibold text-[#212121]">Pairing</div>
+        <div className="mt-4 grid gap-3">
+          <HaAdvancedAction
+            title="Reset pairing"
+            detail="Retry the local pairing flow if this app is paired but not reporting correctly."
+            action={<HaButton type="button" onClick={() => setHaAppScreen("pairing")}>Open pairing</HaButton>}
+          />
+          <HaAdvancedAction
+            title="Unpair from HomeSignal"
+            detail="Remove the HomeSignal cloud association for this app. Local Home Assistant will keep running."
+            action={
+              <button
+                type="button"
+                onClick={() => setShowUnpairConfirm(true)}
+                className="text-sm font-medium text-rose-900/70 underline underline-offset-2 hover:text-rose-950"
+              >
+                Unpair from HomeSignal
+              </button>
+            }
+          />
         </div>
+      </div>
 
-        <div className="rounded-lg border border-[#e0e0e0] bg-white px-5 py-4">
-          <div className="text-sm font-semibold text-[#212121]">Pairing and account association</div>
-          <div className="mt-4 grid gap-3">
-            <HaAdvancedAction
-              title="Repair pairing"
-              detail="Retry the local pairing flow if this add-on is paired but not reporting correctly."
-              action={<HaButton type="button" onClick={() => setAddonScreen("pairing")}>Open pairing</HaButton>}
-            />
-            <HaAdvancedAction
-              title="Unpair from HomeSignal"
-              detail="Remove the HomeSignal cloud association for this add-on. Local Home Assistant will keep running."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setShowUnpairConfirm(true)}
-                  className="text-sm font-medium text-rose-900/70 underline underline-offset-2 hover:text-rose-950"
-                >
-                  Unpair from HomeSignal
-                </button>
-              }
-            />
-          </div>
-        </div>
+      <HaLogTailPanel
+        captureLevel={logCaptureLevel}
+        setCaptureLevel={setLogCaptureLevel}
+      />
 
-        <div className="mt-5 rounded-lg border border-[#e0e0e0] bg-white px-5 py-4">
-          <div className="text-sm font-semibold text-[#212121]">Local metadata</div>
-          <div className="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[190px_1fr]">
-            <div className="text-[#757575]">Installation ID</div>
-            <div className="font-mono text-[#212121]">inst_01J00000000000000000000000</div>
-            <div className="text-[#757575]">Device ID</div>
-            <div className="font-mono text-[#212121]">{haAddonState.device_id}</div>
-            <div className="text-[#757575]">Claim display metadata</div>
-            <div className="text-[#212121]">Revision 1 · last applied May 14, 2026, 12:03 PM</div>
-            <div className="text-[#757575]">Local policy</div>
-            <div className="text-[#212121]">Revision 1 · synced Just now</div>
-            <div className="text-[#757575]">Policy hash</div>
-            <div className="break-all font-mono text-xs text-[#212121]">sha256:8f8f9a3d4d38c7b2</div>
-          </div>
+      <div className="mt-5 rounded-lg border border-[#e0e0e0] bg-white px-5 py-4">
+        <div className="text-sm font-semibold text-[#212121]">Local metadata</div>
+        <div className="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[190px_1fr]">
+          <div className="text-[#757575]">Installation ID</div>
+          <div className="font-mono text-[#212121]">inst_01J00000000000000000000000</div>
+          <div className="text-[#757575]">Device ID</div>
+          <div className="font-mono text-[#212121]">{haAppState.device_id}</div>
+          <div className="text-[#757575]">Claim display metadata</div>
+          <div className="text-[#212121]">Revision 1 · last applied May 14, 2026, 12:03 PM</div>
+          <div className="text-[#757575]">Local policy</div>
+          <div className="text-[#212121]">Revision 1 · synced Just now</div>
+          <div className="text-[#757575]">Policy hash</div>
+          <div className="break-all font-mono text-xs text-[#212121]">sha256:8f8f9a3d4d38c7b2</div>
         </div>
-      </HaCard>
+      </div>
       {showUnpairConfirm && (
         <HaConfirmDialog
           title="Unpair from HomeSignal?"
-          message="This will remove the HomeSignal cloud association for this Home Assistant add-on. Local Home Assistant will keep running."
+          message="This will remove the HomeSignal cloud association for this Home Assistant app. Local Home Assistant will keep running."
           confirmLabel="Yes, unpair"
           cancelLabel="No, keep paired"
           onCancel={() => setShowUnpairConfirm(false)}
           onConfirm={() => {
             setShowUnpairConfirm(false);
-            setAddonScreen("onboarding");
+            setHaAppScreen("onboarding");
           }}
         />
       )}
     </div>
   );
+}
+
+function HaLogTailPanel({ captureLevel, setCaptureLevel }) {
+  const [query, setQuery] = useState("");
+  const [minLevel, setMinLevel] = useState("debug");
+  const [paused, setPaused] = useState(false);
+  const [wrapLines, setWrapLines] = useState(true);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleLogs = mockHaAppLogEntries.filter((entry) => {
+    const meetsLevel = haAppLogLevelRank[entry.level] >= haAppLogLevelRank[minLevel];
+    if (!meetsLevel) return false;
+    if (!normalizedQuery) return true;
+
+    return [entry.level, entry.component, entry.reason, entry.message]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery);
+  });
+  const copyVisibleLogs = () => {
+    copyTextToClipboard(visibleLogs.map(formatLogTailLine).join("\n"));
+  };
+
+  return (
+    <div className="mt-5 rounded-lg border border-[#e0e0e0] bg-white px-5 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-sm font-semibold text-[#212121]">App logs</div>
+          <p className="mt-1 max-w-2xl text-sm leading-5 text-[#616161]">
+            App runtime logs from this app only. These are not Home Assistant system logs.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-[#e0e0e0] px-3 py-1.5 text-xs font-medium text-[#616161]">
+          <HaStateDot tone={paused ? "neutral" : "success"} size="sm" />
+          {paused ? "Paused" : "Live tail"}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <HaLogStat label="Capture level">
+          <select
+            value={captureLevel}
+            onChange={(event) => setCaptureLevel(event.target.value)}
+            className="w-full rounded-md border border-[#e0e0e0] bg-white px-2 py-1 text-sm text-[#212121] focus:border-[#039dcc] focus:outline-none"
+          >
+            {haAppLogLevels.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+        </HaLogStat>
+        <HaLogStat label="Storage used" value={`${haAppLogStorageSummary.used} / ${haAppLogStorageSummary.budget}`} />
+        <HaLogStat label="Retained from" value={formatShortDate(haAppLogStorageSummary.retained_from)} />
+        <HaLogStat label="Suppressed" value={`${haAppLogStorageSummary.suppressed_count} entries`} />
+      </div>
+
+      <div className="mt-4 rounded-md border border-[#e0e0e0] bg-[#fafafa] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="min-w-[220px] flex-1">
+            <span className="sr-only">Search logs</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search logs"
+              className="w-full rounded-md border border-[#e0e0e0] bg-white px-3 py-2 text-sm text-[#212121] placeholder:text-[#9e9e9e] focus:border-[#039dcc] focus:outline-none"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[#616161]">
+            Level
+            <select
+              value={minLevel}
+              onChange={(event) => setMinLevel(event.target.value)}
+              className="rounded-md border border-[#e0e0e0] bg-white px-2 py-2 text-sm text-[#212121] focus:border-[#039dcc] focus:outline-none"
+            >
+              {haAppLogLevels.map((level) => (
+                <option key={level} value={level}>{level}+</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setPaused((current) => !current)}
+            className="rounded-full px-3 py-2 text-sm font-medium text-[#039dcc] hover:bg-[#e1f5fe]"
+          >
+            {paused ? "Resume" : "Pause"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setWrapLines((current) => !current)}
+            className="rounded-full px-3 py-2 text-sm font-medium text-[#039dcc] hover:bg-[#e1f5fe]"
+          >
+            {wrapLines ? "No wrap" : "Wrap"}
+          </button>
+          <button
+            type="button"
+            onClick={copyVisibleLogs}
+            className="rounded-full px-3 py-2 text-sm font-medium text-[#039dcc] hover:bg-[#e1f5fe]"
+          >
+            Copy visible
+          </button>
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-md border border-[#263244] bg-[#0f172a] font-mono text-xs text-slate-100">
+          <div className="grid grid-cols-[94px_72px_132px_1fr] gap-2 border-b border-slate-700/80 bg-slate-950/70 px-3 py-2 text-[11px] uppercase tracking-normal text-slate-400 max-sm:hidden">
+            <div>Time</div>
+            <div>Level</div>
+            <div>Component</div>
+            <div>Message</div>
+          </div>
+          <div className="max-h-[380px] overflow-auto">
+            {visibleLogs.length > 0 ? (
+              visibleLogs.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="grid gap-2 border-b border-slate-800/80 px-3 py-2 last:border-b-0 sm:grid-cols-[94px_72px_132px_1fr]"
+                >
+                  <div className="whitespace-nowrap text-slate-400">{formatLogTailTime(entry.ts)}</div>
+                  <div><HaLogLevelBadge level={entry.level} /></div>
+                  <div className="truncate text-slate-300">{entry.component}</div>
+                  <div className={wrapLines ? "min-w-0 leading-5 text-slate-100" : "min-w-0 truncate text-slate-100"}>
+                    <span className="text-slate-500">{entry.reason}</span>
+                    <span className="text-slate-600"> | </span>
+                    {entry.message}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-8 text-center text-sm text-slate-400">No log entries match the current filters.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[#757575]">
+          <span>{visibleLogs.length} visible entries</span>
+          <span>Newest retained: {formatShortDate(haAppLogStorageSummary.retained_to)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HaLogStat({ label, value, children }) {
+  return (
+    <div className="rounded-md border border-[#eeeeee] bg-white px-3 py-2">
+      <div className="text-xs font-medium uppercase tracking-normal text-[#757575]">{label}</div>
+      <div className="mt-1 text-sm font-medium text-[#212121]">{children || value}</div>
+    </div>
+  );
+}
+
+function HaLogLevelBadge({ level }) {
+  const styles =
+    level === "error"
+      ? "border-red-400 bg-red-500/15 text-red-200"
+      : level === "warning"
+        ? "border-amber-400 bg-amber-500/15 text-amber-200"
+        : level === "debug"
+          ? "border-slate-500 bg-slate-500/15 text-slate-300"
+          : "border-sky-400 bg-sky-500/15 text-sky-200";
+
+  return (
+    <span className={`inline-flex min-w-14 justify-center rounded border px-1.5 py-0.5 text-[11px] font-semibold uppercase ${styles}`}>
+      {level}
+    </span>
+  );
+}
+
+function formatLogTailTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
+function formatLogTailLine(entry) {
+  return `${entry.ts} ${entry.level.toUpperCase()} ${entry.component} ${entry.reason} ${entry.message}`;
 }
 
 function HaAdvancedAction({ title, detail, action }) {
@@ -5182,8 +5892,9 @@ function HaSwitchVisual({ enabled }) {
   );
 }
 
-function HaPermissionSwitchList({ compact = false, value = initialAddonPermissionPolicy, onChange }) {
+function HaPermissionSwitchList({ compact = false, unframed = false, value = initialHaAppPermissionPolicy, onChange }) {
   const [infoState, setInfoState] = useState(null);
+  const [showFullPermissionDetails, setShowFullPermissionDetails] = useState(false);
   const hoverTimer = useRef(null);
   const accessMode = value.accessMode;
   const granularControls = value.granularControls;
@@ -5247,6 +5958,9 @@ function HaPermissionSwitchList({ compact = false, value = initialAddonPermissio
   useEffect(() => () => clearHoverTimer(), []);
 
   const setAccessMode = (nextMode) => {
+    if (nextMode === "custom") {
+      setShowFullPermissionDetails(false);
+    }
     onChange?.({ ...value, accessMode: nextMode });
   };
 
@@ -5262,36 +5976,58 @@ function HaPermissionSwitchList({ compact = false, value = initialAddonPermissio
 
   return (
     <>
-      <div className="grid gap-3 p-4">
+      <div className={`grid gap-3 ${unframed ? "" : "p-4"}`}>
         <HaAccessModeOption
           id={`ha-access-full-${compact ? "compact" : "full"}`}
           checked={accessMode === "full"}
-          title="Full remote management"
-          detail="Allow broad remote management permission."
+          title="Grant full permissions"
+          badge="Default"
+          alwaysShowChildren
           onSelect={() => setAccessMode("full")}
         >
-          <div className="mt-3 flex flex-wrap gap-2">
-            {fullControlPermissionChips.map((permission) => (
-              <span key={permission} className="rounded-full border border-[#b3e5fc] bg-[#e1f5fe] px-3 py-1 text-xs font-medium text-[#0277bd]">
-                {permission}
-              </span>
-            ))}
+          <div className="mt-1 text-sm leading-5 text-slate-600">
+            Allow broad remote management permissions.
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowFullPermissionDetails((current) => !current);
+              }}
+              className="mt-1 block font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
+              aria-expanded={showFullPermissionDetails}
+            >
+              {showFullPermissionDetails ? "Hide permissions" : "See all permissions"}
+            </button>
           </div>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-normal text-slate-500">Default for managed installations</p>
+          {showFullPermissionDetails && (
+            <div className="mt-3 grid gap-3 rounded-md border border-slate-200 bg-white/80 p-3 sm:grid-cols-2">
+              {fullControlPermissionGroups.map(([group, permissions]) => (
+                <div key={group}>
+                  <div className="text-xs font-semibold uppercase tracking-normal text-slate-500">{group}</div>
+                  <ul className="mt-1 space-y-1 text-sm leading-5 text-slate-700">
+                    {permissions.map((permission) => (
+                      <li key={permission}>{permission}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
         </HaAccessModeOption>
 
         <HaAccessModeOption
           id={`ha-access-custom-${compact ? "compact" : "full"}`}
           checked={accessMode === "custom"}
-          title="Choose specific permissions"
-          detail="Review each remote action before pairing."
+          title="Choose custom permissions"
+          detail="Select individual remote permissions before pairing."
           onSelect={() => setAccessMode("custom")}
         />
       </div>
 
       {accessMode === "custom" && (
-        <div className="border-t border-slate-200">
-          {addonControlPolicy.map((control) => {
+        <div className={`${unframed ? "mt-3 rounded-md border border-slate-200" : "border-t border-slate-200"}`}>
+          {haAppControlPolicy.map((control) => {
             const effectiveControl = { ...control, enabled: granularControls[control.key] };
             return (
               <HaSwitchRow
@@ -5313,12 +6049,12 @@ function HaPermissionSwitchList({ compact = false, value = initialAddonPermissio
   );
 }
 
-function HaAccessModeOption({ id, checked, title, detail, onSelect, children }) {
+function HaAccessModeOption({ id, checked, title, badge, detail, alwaysShowChildren = false, onSelect, children }) {
   return (
     <label
       htmlFor={id}
       className={`block cursor-pointer rounded-md border p-3 ${
-        checked ? "border-[#03a9f4] bg-sky-50/70" : "border-slate-200 bg-white hover:bg-slate-50"
+        checked ? "border-slate-200 bg-sky-50/70" : "border-slate-200 bg-white hover:bg-slate-50"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -5330,10 +6066,17 @@ function HaAccessModeOption({ id, checked, title, detail, onSelect, children }) 
           onChange={onSelect}
           className="mt-0.5 h-4 w-4 border-slate-300 accent-[#03a9f4]"
         />
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-950">{title}</div>
-          <div className="mt-1 text-sm leading-5 text-slate-600">{detail}</div>
-          {checked && children}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="text-sm font-semibold text-slate-950">{title}</div>
+            {badge && (
+              <span className="rounded-full border border-slate-200 bg-white/75 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-normal text-slate-500">
+                {badge}
+              </span>
+            )}
+          </div>
+          {detail && <div className="mt-1 text-sm leading-5 text-slate-600">{detail}</div>}
+          {(checked || alwaysShowChildren) && children}
         </div>
       </div>
     </label>
@@ -5742,14 +6485,14 @@ function InternalNoteSection({ title, children }) {
   );
 }
 
-const addonShellStatus = {
-  onboarding: { tone: "active", label: "Not paired with HomeSignal" },
+const haAppShellStatus = {
+  onboarding: { tone: "neutral", label: "Not paired with HomeSignal" },
   healthy: { tone: "success", label: "Paired with HomeSignal cloud" },
   disconnected: { tone: "warning", label: "Disconnected from HomeSignal cloud" },
   outdated: { tone: "success", label: "Paired with HomeSignal cloud" },
 };
 
-function HaAddonShell({ children }) {
+function HaAppShell({ children }) {
   return (
     <div className="bg-white font-['Roboto',Arial,sans-serif] text-[#212121]">
       <div className="bg-white">{children}</div>
@@ -5757,7 +6500,7 @@ function HaAddonShell({ children }) {
   );
 }
 
-function HaAddonNav({ activePage, onNavigate, variant }) {
+function HaAppNav({ activePage, onNavigate, variant }) {
   const items = [
     { key: "status", label: "Status" },
     { key: "pairing", label: "Pairing" },
@@ -5792,7 +6535,7 @@ function HaAddonNav({ activePage, onNavigate, variant }) {
 
   return (
     <nav className="hidden border-b border-[#e0e0e0] bg-white px-5 sm:block sm:px-8" aria-label="HomeSignal Manager navigation">
-      <div className="flex gap-8">
+      <div className="flex gap-7">
         {items.map((item) => {
           const active = activePage === item.key;
           return (
@@ -5800,7 +6543,7 @@ function HaAddonNav({ activePage, onNavigate, variant }) {
               key={item.key}
               type="button"
               onClick={() => onNavigate(item.key)}
-              className={`relative -mb-px min-h-12 px-0 py-3 text-sm font-medium ${
+              className={`relative -mb-px min-h-10 px-0 py-2.5 text-sm font-medium ${
                 active ? "text-[#039dcc]" : "text-[#616161] hover:text-[#212121]"
               }`}
             >
@@ -5819,7 +6562,7 @@ function HaCard({ title, subtitle, children, className = "" }) {
     <section className={`rounded-lg border border-[#e0e0e0] bg-white p-4 shadow-none ${className}`}>
       {title && (
         <div className="mb-3">
-          <h2 className="text-base font-medium text-[#212121]">{title}</h2>
+          <h2 className="text-sm font-semibold text-[#212121]">{title}</h2>
           {subtitle && <p className="mt-1 text-sm leading-5 text-[#616161]">{subtitle}</p>}
         </div>
       )}
@@ -5951,6 +6694,20 @@ function HomeSignalPortalActionLink() {
       className="inline-flex items-center self-center text-sm font-medium text-[#039dcc] underline underline-offset-2 hover:text-[#0277bd]"
     >
       Open HomeSignal portal
+      <ExternalLinkIcon className="ml-1 h-3.5 w-3.5" />
+    </a>
+  );
+}
+
+function HomeSignalAccountActionLink() {
+  return (
+    <a
+      href="https://app.homesignal.local/signup"
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center self-center rounded-full border border-[#039dcc] bg-white px-5 py-2.5 text-sm font-medium text-[#039dcc] hover:bg-[#e1f5fe] hover:text-[#0277bd]"
+    >
+      Create HomeSignal Account
       <ExternalLinkIcon className="ml-1 h-3.5 w-3.5" />
     </a>
   );

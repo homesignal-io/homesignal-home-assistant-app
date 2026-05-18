@@ -21,6 +21,7 @@ Read this when touching:
 - `service-map.md`
 - `telemetry-ingest-build-plan.md`
 - `update-architecture.md`
+- `ha-app-repository-release-strategy.md`
 - `deployment-readiness-matrix.md`
 - `first-deploy-greenlight.md`
 - `operator-prerequisites.md`
@@ -57,6 +58,13 @@ Read this when touching:
 - Use immutable build artifacts.
 - Use environment-specific configuration, not environment-specific code paths.
 - Keep staging structurally similar to production. Do not introduce a separate preprod, demo, or launch environment unless a later product decision explicitly creates one.
+- Split the first staging path into Stage 0 skeleton smoke and Stage 1
+  domain-backed product staging. Generated AWS endpoints are acceptable only for
+  Stage 0 operational smoke.
+- Home Assistant app distribution uses public, generated repository/channel
+  outputs from the source repo. Stable and candidate are production release
+  tracks; staging/non-prod is a separate package/channel that points only at
+  staging cloud.
 - CI/CD is script-first: repo-owned scripts are the real build, test, migrate,
   deploy, and smoke-test interface.
 - AWS CodeBuild is the preferred runner for AWS-heavy build, test, and deploy
@@ -123,6 +131,46 @@ for the staging budget guardrail task, or
 When staging is an AWS Organizations member account, the actual AWS Budget may
 need to be enabled or created from the payer/management account rather than the
 member-account deploy workspace.
+
+## Staging Deploy Path
+
+Use this staging sequence until a later production gate replaces it:
+
+1. **Stage 0: skeleton smoke**
+   `scripts/deploy.sh staging` may deploy the control-plane skeleton to a
+   generated AWS endpoint. `scripts/smoke.sh staging` verifies only operational
+   endpoints and logs. This phase proves AWS account access, IaC, artifact
+   shape, deploy scripts, and smoke scripts.
+2. **Stage 1: domain-backed staging**
+   Before public pairing, claim verification, browser pairing bridge, Home
+   Assistant app staging environment profiles, or email links are considered
+   real staging, wire a stable owned HTTPS domain. The default shape is
+   `staging.<owned-root-domain>` for the first public web origin; split
+   `app.staging.<root>` and `api.staging.<root>` only when route separation
+   requires it.
+
+If no domain exists, keep Stage 0 moving and log the domain as the next operator
+dependency. Do not add arbitrary environment URL fields or URL-parameter
+overrides to the Home Assistant app to compensate for missing DNS. The app
+points at allowlisted environment profiles, and generated AWS endpoints remain
+smoke-only.
+
+## Home Assistant App Distribution Path
+
+The Home Assistant app release path is defined in
+`ha-app-repository-release-strategy.md`.
+
+Deployment defaults:
+
+- one product source repo
+- CI-generated public distribution repo for production stable
+- CI-generated public distribution repo for production candidate/test cohort
+- CI-generated public distribution repo for staging/non-prod
+- track-specific app slug, display name, image name, and cloud profile
+- no secrets or hidden authority in app repository metadata
+- pairing/invite UX chooses the install link for new installs
+- existing installs move tracks only through an explicit local channel/package
+  change, not a silent cloud flip
 
 ## Required Local Plan Checks
 

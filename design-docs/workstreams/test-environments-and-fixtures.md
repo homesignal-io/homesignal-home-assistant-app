@@ -14,7 +14,7 @@ Read this when touching:
 - staging environments
 - CI checks
 - AWS integration tests
-- add-on enrollment tests
+- app enrollment tests
 - telemetry schema tests
 - deployment smoke tests
 
@@ -45,8 +45,8 @@ Read this when touching:
 - Keep AWS-specific code behind adapters so local tests can use fakes.
 - Maintain a simulator device for local/dev validation of Agent HTTPS envelopes, policy behavior, command ACK/result, shadow convergence, and ingest expectations.
 - Run simulator contract tests in CI before merge for changed runtime contracts.
-- Maintain at least one long-lived staging canary device as a real Home Assistant/add-on instance paired through staging AWS IoT Core.
-- Use ephemeral Home Assistant/add-on instances for enrollment, claim, repair/reconnect, and fresh-claim lifecycle tests.
+- Maintain at least one long-lived staging canary device as a real Home Assistant/app instance paired through staging AWS IoT Core.
+- Use ephemeral Home Assistant/app instances for enrollment, claim, repair/reconnect, and fresh-claim lifecycle tests.
 - Maintain golden examples for supported telemetry schemas.
 - Add smoke checks for deployed service health, readiness, and one core workflow.
 - Use `deployment-readiness-matrix.md` for required staging live tests,

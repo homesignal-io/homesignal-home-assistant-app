@@ -1,19 +1,19 @@
-# HomeSignal Add-On Security And Local Authority
+# HomeSignal App Security And Local Authority
 
 ## Goal
 
-Define how the HomeSignal Manager add-on should treat local Home Assistant authority and how that authority relates to HomeSignal cloud authorization.
+Define how the HomeSignal Manager app should treat local Home Assistant authority and how that authority relates to HomeSignal cloud authorization.
 
-This document covers add-on security posture, local authority profiles, Home Assistant user visibility, and command execution boundaries. It does not define Cognito auth, account/site RBAC, AWS IoT device authentication, MQTT topic policy, or telemetry ingestion.
+This document covers app security posture, local authority profiles, Home Assistant user visibility, and command execution boundaries. It does not define Cognito auth, account/site RBAC, AWS IoT device authentication, MQTT topic policy, or telemetry ingestion.
 
 ## Core Principles
 
-* The add-on is the local execution authority for Home Assistant actions.
+* The app is the local execution authority for Home Assistant actions.
 * HomeSignal cloud authorization alone is never enough to mutate a Home Assistant host.
-* Local authority is explicit site/add-on configuration.
+* Local authority is explicit site/app configuration.
 * Dealer-managed installs may reasonably run with elevated local authority.
 * Self-managed installs should make elevated local authority a clear consent decision.
-* The add-on must reject unsupported, unsafe, or disallowed commands even when cloud authorization succeeds.
+* The app must reject unsupported, unsafe, or disallowed commands even when cloud authorization succeeds.
 * No arbitrary shell execution in MVP.
 * No unrestricted file read/upload.
 * No LAN scanning by default.
@@ -46,11 +46,11 @@ Managed/Admin mode may support:
 * Home Assistant user visibility when the platform allows it
 * backup trigger
 * restore flows when explicitly supported later
-* add-on/plugin restart
+* HomeSignal app restart
 * host or Supervisor operations exposed by supported APIs
 * managed update or local supervisor workflows
 
-Managed/Admin mode is not a hidden vendor override. It is a local capability granted by the installer/admin and still bounded by HomeSignal cloud RBAC, site policy, add-on policy, command allowlists, risk tiers, and current device/plugin state.
+Managed/Admin mode is not a hidden vendor override. It is a local capability granted by the installer/admin and still bounded by HomeSignal cloud RBAC, site policy, app policy, command allowlists, risk tiers, and current device/app state.
 
 ## Dealer-Managed Versus Self-Managed
 
@@ -70,17 +70,17 @@ The same underlying agent may support both, but the trust ceremony and defaults 
 
 ## Home Assistant Permission Surface
 
-Home Assistant add-on permissions are primarily declared in add-on configuration, not dynamically requested like browser permissions.
+Home Assistant app permissions are primarily declared in app configuration, not dynamically requested like browser permissions.
 
 Implementation must decide whether elevated authority is delivered by:
 
-* one add-on that declares broad permissions up front and gates behavior with an internal HomeSignal mode switch
-* separate Standard and Managed add-on profiles/packages
+* one app that declares broad permissions up front and gates behavior with an internal HomeSignal mode switch
+* separate Standard and Managed app profiles/packages
 * a later migration from Standard to Managed that requires reinstall/reconfigure
 
 This document does not choose the packaging shape. It defines the security behavior either way.
 
-Broad permission requests may affect user trust at install time. That is acceptable for a supervisory/dealer-managed product when presented clearly, but it should not be described as a passive monitoring add-on.
+Broad permission requests may affect user trust at install time. That is acceptable for a supervisory/dealer-managed product when presented clearly, but it should not be described as a passive monitoring app.
 
 ## Local Command Gate
 
@@ -90,13 +90,13 @@ For any cloud-requested local action, execution requires all relevant gates:
 2. HomeSignal AuthorizationService permits the action.
 3. Site relationship and membership rules permit the target site.
 4. Site policy permits the operation category.
-5. Add-on local authority profile permits the operation category.
-6. Plugin/device policy permits the specific command.
+5. App local authority profile permits the operation category.
+6. App/device policy permits the specific command.
 7. Command type is known and allowlisted.
-8. Current device/plugin state allows safe execution.
+8. Current device/app state allows safe execution.
 9. Command is audited before and after execution.
 
-The add-on must treat cloud requests as instructions to evaluate, not as commands to blindly execute.
+The app must treat cloud requests as instructions to evaluate, not as commands to blindly execute.
 
 ## Host-Write And High-Risk Operations
 
@@ -105,10 +105,10 @@ The following operations require Managed/Admin mode and specific cloud permissio
 * backup trigger
 * backup restore
 * host reboot
-* HomeSignal add-on restart
-* agent/plugin update
+* HomeSignal app restart
+* HomeSignal app update
 * remote access provider/local configuration update
-* any write to Home Assistant, Supervisor, add-on, host, or local managed component state
+* any write to Home Assistant, Supervisor, app, host, or local managed component state
 
 High-risk operations should remain separate in the cloud action catalog. Do not hide them behind one broad command permission.
 
@@ -118,7 +118,7 @@ Remote access provider/local configuration update is high risk because it can ch
 
 ## Home Assistant User Handling
 
-The add-on may use current Home Assistant ingress user context when available. This is useful for attribution, local UX, and debugging.
+The app may use current Home Assistant ingress user context when available. This is useful for attribution, local UX, and debugging.
 
 Full Home Assistant user inventory is not required for v0 onboarding.
 
@@ -136,7 +136,7 @@ HomeSignal identities come from Cognito and local HomeSignal users. Home Assista
 
 HomeSignal cloud onboarding should capture a lightweight customer record for every site, even when the dealer owns the site account relationship.
 
-The add-on may help collect local context, but it should not require Home Assistant user inventory to create a customer record.
+The app may help collect local context, but it should not require Home Assistant user inventory to create a customer record.
 
 Customer record fields may include:
 
@@ -183,7 +183,7 @@ Do not build:
 * LAN scanning by default
 * subnet routing by default
 * automatic Home Assistant user import
-* cloud-side override of local add-on refusal
+* cloud-side override of local app refusal
 * hidden support/vendor execution channel
 * broad external sharing through local Home Assistant users
 
@@ -202,6 +202,6 @@ Add tests before shipping managed local actions:
 
 ## Final Position
 
-HomeSignal may be a supervisory product with elevated local authority, especially for dealer-managed installs. That authority must be explicit, locally granted, allowlisted, audited, and subordinate to both cloud RBAC and local add-on safety checks.
+HomeSignal may be a supervisory product with elevated local authority, especially for dealer-managed installs. That authority must be explicit, locally granted, allowlisted, audited, and subordinate to both cloud RBAC and local app safety checks.
 
-The add-on should be powerful when the site owner/dealer chooses managed operation, but it must never become an unbounded remote execution channel.
+The app should be powerful when the site owner/dealer chooses managed operation, but it must never become an unbounded remote execution channel.

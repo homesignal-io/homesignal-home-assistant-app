@@ -21,7 +21,7 @@ Use these defaults unless a later decision changes scope.
 Default claim path remains:
 
 ```text
-unclaimed add-on
+unclaimed app
   -> HomeSignal API enrollment endpoints over HTTPS
   -> HomeSignal-authorized AWS IoT CSR signing/provisioning
   -> HomeSignal finalization
@@ -54,14 +54,14 @@ This reuses the same AWS IoT-signed device certificate identity used by `/agent/
 
 `telemetry` carries reported current/latest state. The v0 root contract is
 `schema_type=device.health_snapshot`, whose payload is namespaced under
-`agent`, `home_assistant`, `addons`, and `runtime_log_summary`.
+`agent`, `home_assistant`, `ha_apps`, and `runtime_log_summary`.
 
 `event` carries occurrences such as `ha_event`, `agent_alarm`, future
 `command_lifecycle`, and `system_event`.
 
-Runtime events are allowlisted and budgeted. Cloud policy provisions the add-on's local publish budget; the add-on enforces the last accepted budget hard, and cloud ingest enforces current server policy immediately. Normal durable policy convergence belongs behind `edge-state-adapter.md` and AWS IoT named shadows. Scoped `refresh_publish_policy` can accelerate or repair local convergence but is not required for correctness.
+Runtime events are allowlisted and budgeted. Cloud policy provisions the app's local publish budget; the app enforces the last accepted budget hard, and cloud ingest enforces current server policy immediately. Normal durable policy convergence belongs behind `edge-state-adapter.md` and AWS IoT named shadows. Scoped `refresh_publish_policy` can accelerate or repair local convergence but is not required for correctness.
 
-The add-on receives resolved effective publish policy, not plan/tier labels. It
+The app receives resolved effective publish policy, not plan/tier labels. It
 reports `applied_publish_policy_version` with every claimed-device runtime
 publish. Conservative defaults allow low-rate health snapshot and strict-budget
 `agent_alarm`, while disabling live `ha_event` and paid/live event behavior.
@@ -86,7 +86,7 @@ payload
 
 Missing, duplicate, or invalid HomeSignal envelope fields are rejected or quarantined before product state changes.
 
-Cloud-to-device commands use the normal MQTT broker path because the add-on must subscribe to command topics. Do not move command delivery to Basic Ingest.
+Cloud-to-device commands use the normal MQTT broker path because the app must subscribe to command topics. Do not move command delivery to Basic Ingest.
 
 ### Device Identity And Credential Identity
 
@@ -257,7 +257,7 @@ Build:
 - Embedded schema catalog loaded on boot.
 - `message_type=telemetry`, `schema_type=device.health_snapshot`,
   `schema_version=1` handler.
-- Payload projection for `agent`, `home_assistant`, `addons`, and
+- Payload projection for `agent`, `home_assistant`, `ha_apps`, and
   `runtime_log_summary` namespaces.
 - `message_type=event`, `schema_type=agent_alarm`, `schema_version=1` handler
   for `potential_abuse_detected`, `publish_policy_apply_failed`,
@@ -278,7 +278,7 @@ Acceptance:
 - Non-allowlisted event categories/types are rejected or quarantined.
 - Routine over-budget events are dropped/counted.
 - Suspicious or security-relevant events are quarantined.
-- Sustained over-budget publishing can request scoped publish-policy refresh without changing unrelated add-on config.
+- Sustained over-budget publishing can request scoped publish-policy refresh without changing unrelated app config.
 - Unsupported schema writes/returns quarantine failure and does not update latest state.
 - Material hash ignores noisy envelope/sample fields.
 - Schema catalog exposes supported schema list for internal diagnostics.

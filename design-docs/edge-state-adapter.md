@@ -20,7 +20,7 @@ Read this before adding or changing:
 - desired/reported edge state
 - publish-policy delivery to devices
 - device convergence projections
-- product-service writes that need to reach the add-on as durable desired state
+- product-service writes that need to reach the app as durable desired state
 - replacements for AWS IoT shadows or a future HomeSignal Device Twin service
 
 Also read:
@@ -76,8 +76,8 @@ There must be one owner for each fact.
 | Account/site/device ownership | Account/Site and Device Registry | Reads derived identifiers only |
 | Effective publish policy | Publish Policy / Device Registry domain | Writes compact desired policy reference/version to shadow |
 | Device applied publish policy version | Device reports through shadow `reported` | Projects compact convergence status to DB |
-| Desired add-on/supervisor version | Release / Update Orchestrator | Writes compact desired version/pointer to shadow when that flow exists |
-| Device observed add-on version | Device reports through telemetry or shadow, depending on schema | Projects only the product-needed latest fact |
+| Desired app/supervisor version | Release / Update Orchestrator | Writes compact desired version/pointer to shadow when that flow exists |
+| Device observed app version | Device reports through telemetry or shadow, depending on schema | Projects only the product-needed latest fact |
 | Command ACK/result | Command Service | Not shadow state; command lifecycle remains separate |
 | Topology, logs, diagnostics, backups | Artifact/Topology/Diagnostics/Backup owners | Not stored in shadow except tiny availability hints if a later spec chooses that |
 
@@ -91,14 +91,14 @@ sequenceDiagram
   participant DB as Postgres
   participant Adapter as Edge State Adapter
   participant Shadow as AWS IoT Named Shadow
-  participant Addon as HomeSignal Add-on
+  participant App as HomeSignal App
   participant API as API Facade
 
   Domain->>DB: Commit authoritative product fact
   Domain->>Adapter: Request desired edge projection update
   Adapter->>Shadow: Write compact desired state
-  Shadow-->>Addon: Delta/current desired state
-  Addon->>Shadow: Report applied/observed edge state
+  Shadow-->>App: Delta/current desired state
+  App->>Shadow: Report applied/observed edge state
   Adapter->>Shadow: Observe reported state/version
   Adapter->>DB: Store compact projection/convergence status
   API->>DB: Read product truth plus projection
@@ -141,8 +141,8 @@ homesignal_edge
 Use `homesignal_edge` desired/reported for:
 
 - active publish policy version
-- small resolved publish-policy values the add-on needs immediately, such as enabled event families and telemetry cadence
-- desired add-on/supervisor version or update channel pointers
+- small resolved publish-policy values the app needs immediately, such as enabled event families and telemetry cadence
+- desired app/supervisor version or update channel pointers
 
 Keep backup, diagnostics, topology, artifacts, logs, command history, and routine health out of the shadow unless a later service spec introduces a concrete durable desired-state need.
 
@@ -161,13 +161,13 @@ Use notifications only as hints. Notification delivery is never proof that a dev
 
 - Use the named shadow `homesignal_edge` for v0.
 - Keep the shadow compact and purpose-specific.
-- Store version/reference pointers plus tiny resolved config values where the add-on needs them to converge immediately.
+- Store version/reference pointers plus tiny resolved config values where the app needs them to converge immediately.
 - Store references, versions, booleans, and small status summaries, not bulky payloads.
 - Do not store raw logs, stack traces, topology blobs, full publish-policy documents, signed URLs, secrets, backup payloads, or diagnostic bundles in shadows.
 - Treat shadow `desired` as cloud-authored through the adapter.
 - Treat shadow `reported` as device-authored.
 - If a product service needs to change device desired state, it calls the Edge State Adapter instead of writing directly to AWS IoT.
-- If the add-on needs to report applied desired state, it writes shadow `reported`; ordinary telemetry/events remain on the runtime ingest path.
+- If the app needs to report applied desired state, it writes shadow `reported`; ordinary telemetry/events remain on the runtime ingest path.
 - Do not clear durable desired fields automatically after convergence; desired state remains the target until superseded.
 - Use shadow versions/timestamps to ignore stale updates.
 - Keep the payload small enough that the design remains comfortably below AWS IoT shadow document quotas.
@@ -225,8 +225,8 @@ Reported failure detail is limited to bounded status and reason fields:
 ```
 
 The `update` section is the compact desired/reported convergence surface for
-HomeSignal add-on version intent. It does not deliver update artifacts or
-force installation. CI/CD or release tooling publishes the add-on version through
+HomeSignal app version intent. It does not deliver update artifacts or
+force installation. CI/CD or release tooling publishes the app version through
 the normal Home Assistant/GitHub release path first; the Release / Update
 Orchestrator and Edge State Adapter then promote a desired version/channel into
 the shadow when HomeSignal wants a cohort to converge. Reported update state lets
@@ -236,18 +236,18 @@ Do not include stack traces, logs, full policy blobs, release artifacts, downloa
 
 ## Device Reported Update Triggers
 
-The add-on must not update shadow `reported` on a heartbeat or fixed telemetry cadence. Shadow operations are costed and should represent convergence, not routine reporting.
+The app must not update shadow `reported` on a heartbeat or fixed telemetry cadence. Shadow operations are costed and should represent convergence, not routine reporting.
 
-The add-on should update shadow `reported` only when one of these happens:
+The app should update shadow `reported` only when one of these happens:
 
 - it observes a shadow `desired` delta and successfully applies the relevant desired state
 - it observes a shadow `desired` delta and rejects or cannot apply it, with a bounded reason code
-- local durable edge state changes in a way that affects a desired-state contract, such as active publish-policy version, accepted policy expiry, or desired add-on/update version
-- the add-on reconnects or restarts and discovers that its local applied state differs from the current shadow `desired`
+- local durable edge state changes in a way that affects a desired-state contract, such as active publish-policy version, accepted policy expiry, or desired app/update version
+- the app reconnects or restarts and discovers that its local applied state differs from the current shadow `desired`
 - a bounded repair path such as `refresh_publish_policy` changes or confirms the applied desired-state version
-- the add-on detects local policy drift, rollback, missing policy, or another compact convergence/security condition that the cloud must know to reason about desired state
+- the app detects local policy drift, rollback, missing policy, or another compact convergence/security condition that the cloud must know to reason about desired state
 
-The add-on must not update shadow `reported` for:
+The app must not update shadow `reported` for:
 
 - routine telemetry snapshots
 - routine health heartbeats

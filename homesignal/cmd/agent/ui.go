@@ -19,6 +19,9 @@ func newUIView(snapshot EnrollmentSnapshot, ready readyResponse) uiView {
 	}
 }
 
+// uiHTML is the temporary skeleton ingress page. The production HomeSignal
+// Manager UI should be mounted as static React assets served by this Go runtime;
+// see design-docs/ha-app-ui-mount-plan.md for the adapter and route contract.
 const uiHTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -58,7 +61,7 @@ const uiHTML = `<!doctype html>
       </dl>
     {{ else if eq .Status.ClaimState "REVOKED" }}
       <h2>Revoked</h2>
-      <p class="muted">This add-on is in a safe revoked state. Release cleanup is not implemented in this build.</p>
+      <p class="muted">This app is in a safe revoked state. Release cleanup is not implemented in this build.</p>
     {{ else }}
       <h2>Enrollment</h2>
       <p class="muted">A claimable pairing code is not currently available.</p>

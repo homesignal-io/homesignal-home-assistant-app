@@ -14,7 +14,7 @@ Agents must use this spec to decide:
 - which domain service owns the route's business behavior
 - which authentication, authorization, idempotency, rate-limit, and response rules apply
 - whether OpenAPI must be updated
-- whether a direct add-on API call is allowed in v0
+- whether a direct app API call is allowed in v0
 
 Do not implement public route behavior that is not represented in OpenAPI.
 
@@ -53,7 +53,7 @@ The API Facade owns:
 - request IDs and correlation IDs
 - operational request logging
 - delegation to one owning domain/workflow method per mutation
-- composed read-model response contracts for portal/add-on sanity
+- composed read-model response contracts for portal/app sanity
 
 For temporary debug mode, the API Facade owns the operator/support HTTP route
 shape and request validation. Diagnostics owns debug-session product behavior,
@@ -101,7 +101,7 @@ Agent-authenticated routes use:
 /agent/...
 ```
 
-Public routes are for portal, add-on bootstrap, and other client-facing product APIs. Agent routes are for claimed devices authenticated with mTLS. Internal routes are for trusted infrastructure, service identities, workers, and AWS hooks. Browser and add-on clients must not call `/internal/*`.
+Public routes are for portal, app bootstrap, and other client-facing product APIs. Agent routes are for claimed devices authenticated with mTLS. Internal routes are for trusted infrastructure, service identities, workers, and AWS hooks. Browser and app clients must not call `/internal/*`.
 
 `/internal/*` routes must not be internet-facing. When services are physically
 split, internal routes are reachable only through trusted AWS/service networking
@@ -162,7 +162,7 @@ emit operational log
 The API Facade owns authentication for inbound HTTP credentials:
 
 - Cognito JWTs for human users.
-- Claim verification tokens for unauthenticated add-on enrollment confirmation.
+- Claim verification tokens for unauthenticated app enrollment confirmation.
 - Verified client certificates for `/agent/*` routes.
 - AWS IAM/SigV4-authenticated service principals for AWS-hosted `/internal/*`
   routes when calls cross process boundaries.
@@ -404,7 +404,7 @@ contracts; domain services own the underlying facts.
 `GET /api/v1/dashboard` returns:
 
 - account-scoped summary counts: managed sites, managed devices, online devices,
-  sites needing review, open issue count, backup issue count, add-on update
+  sites needing review, open issue count, backup issue count, app update
   attention count, and email-alert configuration status
 - a primary dashboard state such as `ok` or `action_required`
 - managed Home Assistant rows, using the same row shape as `GET /api/v1/devices`
@@ -415,7 +415,7 @@ contracts; domain services own the underlying facts.
 - `site_id`, `site_name`, optional presentation-only `site_category`, customer
   display name, compact location, and device summary
 - presence label and last-seen facts from Presence
-- Home Assistant, Supervisor, HomeSignal add-on, backup, storage, and update
+- Home Assistant, Supervisor, HomeSignal app, backup, storage, and update
   summary facts from latest-state/backing services
 - a computed issue list and primary action
 
@@ -440,9 +440,9 @@ V0 customer-facing issue codes:
 | `device_disconnected` | `critical` | Presence | Show as needing review; eligible for email alert. |
 | `backup_failed` | `critical` | Backup Service | Show as needing review; eligible for email alert. |
 | `backup_overdue` | `warning` | Backup Service | Show as needing review; eligible for email alert. |
-| `addon_update_attention` | `warning` | Release/Update plus latest state | Show after a 48 hour grace period when the HomeSignal add-on has not reached desired/current version; eligible for email alert. |
+| `app_update_attention` | `warning` | Release/Update plus latest state | Show after a 48 hour grace period when the HomeSignal app has not reached desired/current version; eligible for email alert. |
 | `ha_update_advisory` | `info` | Home Assistant version catalog plus latest state | Portal advisory only in v0; not an email alert by default. Hide when latest-version source is unavailable. |
-| `storage_warning` | `warning` | Telemetry latest state | Show only when the add-on reports bounded storage status. |
+| `storage_warning` | `warning` | Telemetry latest state | Show only when the app reports bounded storage status. |
 
 Issue projection is allowed to be computed at request time for v0. If it becomes
 expensive, the same shape may be materialized later without changing the public
@@ -489,13 +489,13 @@ PATCH /api/v1/alert-recipients/{recipient_id}
 DELETE /api/v1/alert-recipients/{recipient_id}
 ```
 
-Alert recipient records are email-recipient scoped. Each recipient may have independent subscriptions for disconnected devices, backup failures, add-on/update attention, and later alert families, plus optional account/site scope. The API must not expose the transactional email provider as a public concept. Notification Service owns provider delivery through an internal adapter after Alerting creates notification requests. V0 uses Resend behind that adapter, but public API responses must not expose Resend-specific IDs or terminology except in internal/admin delivery diagnostics.
+Alert recipient records are email-recipient scoped. Each recipient may have independent subscriptions for disconnected devices, backup failures, app/update attention, and later alert families, plus optional account/site scope. The API must not expose the transactional email provider as a public concept. Notification Service owns provider delivery through an internal adapter after Alerting creates notification requests. V0 uses Resend behind that adapter, but public API responses must not expose Resend-specific IDs or terminology except in internal/admin delivery diagnostics.
 
 New email recipients start in `pending_verification` unless the address already
 belongs to the verified authenticated user creating the recipient. Notification
 Service must not deliver product alerts to an unverified recipient. V0 alert
 families are `device_disconnected`, `backup_failed_or_overdue`, and
-`addon_update_attention`; Home Assistant version advisories remain portal-only
+`app_update_attention`; Home Assistant version advisories remain portal-only
 unless a later product decision promotes them to email alerts.
 
 ## Data Access
@@ -569,40 +569,40 @@ API Facade may emit durable audit only for API-boundary security events such as 
 - `PATCH` uses simple partial JSON bodies, not JSON Patch.
 - `DELETE` means actual delete. If the product meaning is archive, release, revoke, cancel, or end access, use an explicit action endpoint.
 
-## Direct Add-On API Boundary
+## Direct App API Boundary
 
-v0 public add-on-to-cloud API surface is enrollment/bootstrap only:
+v0 public app-to-cloud API surface is enrollment/bootstrap only:
 
 ```text
 POST /api/v1/device-enrollment/claim-invites/verify
 POST /api/v1/device-enrollment/claim-verifications/{claim_verification_id}/confirm
 ```
 
-These public add-on enrollment routes are intentionally POST-only. Claim codes
+These public app enrollment routes are intentionally POST-only. Claim codes
 must appear only in JSON request bodies, never in URL paths, query strings,
 redirects, or link fragments. Responses must use `Cache-Control: no-store`.
-The API must not enable broad browser CORS for these routes; the local add-on
+The API must not enable broad browser CORS for these routes; the local app
 backend should call HomeSignal rather than exposing claim codes to arbitrary
 browser origins.
 
-Unauthenticated add-on enrollment errors must avoid invite enumeration. Unknown,
+Unauthenticated app enrollment errors must avoid invite enumeration. Unknown,
 malformed, expired, cancelled, used, disabled, and unauthorized invites all map
 to a generic unavailable error class unless the caller is an authenticated
 portal user authorized for that site.
 
 Routine claimed-device telemetry/events use the mTLS Agent HTTPS API in v0. AWS IoT Core remains the realtime control/session layer for commands, notifications, shadows, and lifecycle presence. `/agent/*` callbacks are device-runtime flows and are intentionally separate from the public enrollment/bulk API surface above.
 
-Compact desired/reported edge state uses AWS IoT named shadows through `edge-state-adapter.md`, not direct add-on API routes.
+Compact desired/reported edge state uses AWS IoT named shadows through `edge-state-adapter.md`, not direct app API routes.
 
-Out of scope for v0 direct add-on API:
+Out of scope for v0 direct app API:
 
 - reported edge state
 - command ACKs and results outside approved mTLS Agent HTTPS API callbacks
 - topology upload
 - generic artifact upload/download brokering
-- device status/revocation polling unless explicitly reintroduced by a later add-on/API spec
+- device status/revocation polling unless explicitly reintroduced by a later app/API spec
 
-Future artifact transfer must follow `artifact-upload-broker.md`. The approved pattern is split by layer: AWS IoT delivers only a tiny command notice, the mTLS Agent HTTPS API handles command detail retrieval, artifact upload negotiation, signed URL issuance, upload completion, and command result reporting, and object storage holds artifact bytes. Signed URLs must not be sent over IoT Core. It must include local add-on allowlists, destination validation, TTL limits, size limits, redaction rules, metadata records, and upload-failure recursion guards before implementation.
+Future artifact transfer must follow `artifact-upload-broker.md`. The approved pattern is split by layer: AWS IoT delivers only a tiny command notice, the mTLS Agent HTTPS API handles command detail retrieval, artifact upload negotiation, signed URL issuance, upload completion, and command result reporting, and object storage holds artifact bytes. Signed URLs must not be sent over IoT Core. It must include local app allowlists, destination validation, TTL limits, size limits, redaction rules, metadata records, and upload-failure recursion guards before implementation.
 
 ## Agent HTTPS API
 
@@ -626,9 +626,9 @@ Authentication:
 
 Device credential model:
 
-- During claim, the add-on generates a private key locally and submits a CSR through the HomeSignal claim flow.
+- During claim, the app generates a private key locally and submits a CSR through the HomeSignal claim flow.
 - HomeSignal coordinates AWS IoT `CreateCertificateFromCsr`; AWS IoT signs the CSR and returns `certificatePem`, `certificateId`, and `certificateArn`.
-- HomeSignal returns the certificate PEM to the add-on, stores the AWS certificate identifiers and derived certificate metadata, and never receives or stores the private key.
+- HomeSignal returns the certificate PEM to the app, stores the AWS certificate identifiers and derived certificate metadata, and never receives or stores the private key.
 - HomeSignal may pass the certificate PEM through during claim, but does not need to persist the full PEM; the durable authorization record stores fingerprint, serial, issuer, AWS certificate ID/ARN, status, `device_id`, `site_id`, and `org_id`.
 - Later `/agent/*` requests are authorized by exact certificate fingerprint/serial lookup against that record.
 
@@ -738,4 +738,4 @@ Internal routes use `/internal/*`, service authentication, standard request IDs,
 - API errors use the standard error envelope.
 - API responses return `X-Request-ID` and `X-Correlation-ID`.
 - API request logs are operational logs, not audit history.
-- Public `/api/v1` add-on API is limited to enrollment/bootstrap in v0; claimed-device runtime HTTPS uses approved mTLS `/agent/*` routes.
+- Public `/api/v1` app API is limited to enrollment/bootstrap in v0; claimed-device runtime HTTPS uses approved mTLS `/agent/*` routes.

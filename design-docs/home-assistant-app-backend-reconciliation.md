@@ -1,13 +1,13 @@
-# Home Assistant Add-On Backend Reconciliation
+# Home Assistant App Backend Reconciliation
 
 Scope: browser walkthrough of
-`http://127.0.0.1:5173/#page=HA+Add-on&site=site_123&device=dev_123&addon=onboarding`,
+`http://127.0.0.1:5173/#page=HA+App&site=site_123&device=dev_123&app=onboarding`,
 source review of `design-mock/src/App.jsx`, and follow-up product decisions from
 the local Home Assistant settings reference.
 
 ## Position
 
-The HA add-on shell is directionally valid. The main status surface maps to the
+The HA app shell is directionally valid. The main status surface maps to the
 existing `device.health_snapshot`, `device_presence`, `device_latest_state`,
 `homesignal_edge.update`, enrollment, and command lifecycle architecture.
 
@@ -15,9 +15,9 @@ The remaining product/contract work is specific:
 
 - Claim authority remains HTTPS enrollment/finalization.
 - After claim, cloud sends a simple IoT `claim_welcome` nudge with non-secret
-  display metadata. No command ACK/result. The add-on just stores the values.
+  display metadata. No command ACK/result. The app just stores the values.
 - `claim_welcome` should be a retained MQTT message on an exact per-device
-  custom topic so the add-on can receive it after first subscription without
+  custom topic so the app can receive it after first subscription without
   relying on an opaque broker handshake.
 - The settled name for the permission list is **Local Management Permission
   Catalog**.
@@ -38,16 +38,18 @@ implementation, local UI implementation, or telemetry/read-model depth.
 
 | UI surface | Backend/source of truth | Status |
 | --- | --- | --- |
-| Claim invite code, expiry, loading, rate limit | `device_claim_invites`, `device_claim_verifications`, and add-on local pairing state | Ready after invite-flow update |
+| Claim invite code, expiry, loading, rate limit | `device_claim_invites`, `device_claim_verifications`, and app local pairing state | Ready after invite-flow update |
 | Claim state: unclaimed, pairing pending, claimed, revoked | `/config/device.json` plus enrollment finalization | Ready |
 | Post-claim friendly metadata | Retained IoT `claim_welcome` notification after `CLAIMED` | Settled |
 | Device ID / Thing name | durable `device_id`, with Thing name equal to `device_id` | Ready |
 | Cloud paths: Agent HTTPS and IoT connected | `device.health_snapshot.payload.agent.cloud_connection` plus IoT presence | Ready |
 | Last telemetry/report time | local send state and cloud `last_accepted_telemetry_at` | Ready, implementation depth needed |
 | Agent/Core/Supervisor/backup/storage rows | `device.health_snapshot.payload.agent` and `payload.home_assistant` | Ready at architecture level |
-| Managed add-ons row and event counts | `device.health_snapshot.payload.addons[]` | Ready at architecture level |
+| Managed apps row and event counts | `device.health_snapshot.payload.ha_apps[]` | Ready at architecture level |
 | Runtime warnings and suppression budget | `runtime_log_summary[]` and `agent.suppression_counts[]` | Ready at architecture level |
-| Add-on current/desired/latest version | `agent.update` plus `homesignal_edge.update` desired/reported state | Ready |
+| Local diagnostic log store | bounded `/config/logs` ring plus local registry | Ready after app runtime architecture update |
+| Cloud-requested app log bundle | `upload_artifact` command with `error_log_bundle` purpose and brokered upload | Ready after app runtime architecture update |
+| App current/desired/latest version | `agent.update` plus `homesignal_edge.update` desired/reported state | Ready |
 | Auto-update/watchdog/start on boot | Local Home Assistant instructions only | Ready if instruction-only |
 | Remote management policy switches | Local Management Permission Catalog plus telemetry delta | Settled |
 | Local unpair | Local reset action; cloud release/revoke is separate | Settled requirement |
@@ -60,13 +62,13 @@ Claiming must happen first:
 
 ```text
 SaaS user creates a site-bound claim invite
-  -> local add-on verifies the claim invite and user confirms the details
+  -> local app verifies the claim invite and user confirms the details
   -> HTTPS enrollment/finalization completes
   -> backend marks device CLAIMED
-  -> add-on stores durable credentials and boots runtime
-  -> add-on connects to IoT Core and subscribes
+  -> app stores durable credentials and boots runtime
+  -> app connects to IoT Core and subscribes
   -> cloud publishes retained claim_welcome over IoT
-  -> add-on stores non-secret display metadata
+  -> app stores non-secret display metadata
   -> next telemetry reports current local metadata/policy revision
 ```
 
@@ -84,12 +86,12 @@ homesignal/devices/{device_id}/notifications/claim_welcome
 Delivery:
 
 - Publish as an MQTT retained message on the exact topic above.
-- The add-on must subscribe to the exact topic, not only a wildcard filter, if
+- The app must subscribe to the exact topic, not only a wildcard filter, if
   it wants retained delivery on first subscription.
 - This is a custom HomeSignal topic, not a reserved AWS shadow topic.
-- The add-on applies the latest retained message idempotently.
+- The app applies the latest retained message idempotently.
 - Cloud may replace the retained message when display metadata changes, or clear
-  it after the add-on has reported the current metadata revision/hash through
+  it after the app has reported the current metadata revision/hash through
   telemetry.
 
 Payload:
@@ -136,9 +138,9 @@ Rules:
 - No command ACK/result is required.
 - No secrets, tokens, certs, signed URLs, private keys, broad customer data, or
   policy authority are allowed in the message.
-- The add-on applies the message only when `payload.device_id` matches its local
+- The app applies the message only when `payload.device_id` matches its local
   claimed `device_id`.
-- The add-on stores the non-secret display metadata locally.
+- The app stores the non-secret display metadata locally.
 - If the message is missed, the device remains claimed. The next health snapshot
   can still report what local metadata revision it has.
 - Retained delivery is the race guard. Do not depend on AWS IoT Core sending a
@@ -161,7 +163,7 @@ Suggested next health snapshot addition:
 
 ## Local Management Permission Catalog
 
-The settled catalog name is **Local Management Permission Catalog**. The add-on
+The settled catalog name is **Local Management Permission Catalog**. The app
 should enumerate local management permissions from this catalog. Do not use a
 single "full access" boolean as the backend contract. The UI can offer presets,
 but the stored/sent shape should be explicit.
@@ -178,16 +180,16 @@ when the local UI has collected the policy:
     "schema_version": 1,
     "policy_revision": 1,
     "authority_profile": "managed_admin",
-    "source": "local_addon_pairing",
+    "source": "local_ha_app_pairing",
     "selected_at": "2026-05-14T12:00:00Z",
     "permissions": [
       { "key": "ha_status_read", "enabled": true },
       { "key": "ha_backup_status_read", "enabled": true },
       { "key": "ha_backup_trigger", "enabled": true },
       { "key": "ha_storage_status_read", "enabled": true },
-      { "key": "ha_addon_inventory_read", "enabled": true },
-      { "key": "homesignal_addon_update_status_read", "enabled": true },
-      { "key": "homesignal_addon_update_intent", "enabled": true },
+      { "key": "ha_app_inventory_read", "enabled": true },
+      { "key": "homesignal_app_update_status_read", "enabled": true },
+      { "key": "homesignal_app_update_intent", "enabled": true },
       { "key": "diagnostics_basic", "enabled": true },
       { "key": "diagnostics_error_log_bundle", "enabled": false },
       { "key": "runtime_log_summary", "enabled": true }
@@ -204,18 +206,18 @@ Initial v0 Local Management Permission Catalog keys:
 | `ha_backup_status_read` | Read backup summary/status | enabled |
 | `ha_backup_trigger` | Allow approved cloud backup trigger command | enabled for managed installs |
 | `ha_storage_status_read` | Read bounded storage status | enabled |
-| `ha_addon_inventory_read` | Read installed add-on inventory/update summary | enabled |
-| `homesignal_addon_update_status_read` | Read HomeSignal add-on update posture | enabled |
-| `homesignal_addon_update_intent` | Allow HomeSignal add-on desired version/channel intent | enabled |
-| `diagnostics_basic` | Allow bounded add-on/connectivity/update-readiness diagnostics | enabled |
+| `ha_app_inventory_read` | Read installed app inventory/update summary | enabled |
+| `homesignal_app_update_status_read` | Read HomeSignal app update posture | enabled |
+| `homesignal_app_update_intent` | Allow HomeSignal app desired version/channel intent | enabled |
+| `diagnostics_basic` | Allow bounded app/connectivity/update-readiness diagnostics | enabled |
 | `diagnostics_error_log_bundle` | Allow approved brokered redacted error-log bundle | disabled by default |
 | `runtime_log_summary` | Send bounded collapsed runtime warning summaries | enabled |
 
 Future/high-risk keys may exist in the UI as locked/off/local-only rows, but
 they are not executable until an owning command/service contract exists:
 
-- `ha_addon_install`
-- `ha_addon_rollback`
+- `ha_app_install`
+- `ha_app_rollback`
 - `ha_core_update`
 - `broad_ha_diagnostics`
 - `raw_log_export`
@@ -225,14 +227,14 @@ Rules:
 
 - This policy metadata does not authorize the claim by itself.
 - Cloud command execution still requires normal cloud authorization, site policy,
-  command allowlist, and the local add-on policy gate.
+  command allowlist, and the local app policy gate.
 - Unknown permission keys are ignored or recorded as unsupported; they must not
   grant authority.
 - Local policy must be persisted locally and survive restart.
 
 ### Policy Delta With Telemetry
 
-When the user changes policy later from the local settings page, the add-on
+When the user changes policy later from the local settings page, the app
 should persist the new local policy revision and send a delta to cloud through
 the approved Agent HTTPS runtime reporting path.
 
@@ -253,7 +255,7 @@ Event shape:
     "policy_revision": 2,
     "previous_policy_revision": 1,
     "changed_at": "2026-05-14T13:00:00Z",
-    "source": "local_addon_settings",
+    "source": "local_app_settings",
     "changes": [
       {
         "key": "diagnostics_error_log_bundle",
@@ -300,8 +302,8 @@ Needed local pages:
 - Management policy
 - Advanced
 
-If Status or Pairing already exists in the add-on UI, this does not require a
-new page. The requirement is that the local add-on has these surfaces available
+If Status or Pairing already exists in the app UI, this does not require a
+new page. The requirement is that the local app has these surfaces available
 or reachable in the Home Assistant-style navigation.
 
 Management policy page:
@@ -318,17 +320,43 @@ Advanced page:
 - Includes search/filter for local policy rows and advanced actions.
 - Shows current local policy revision/hash and last cloud sync time.
 - Shows current claim/display metadata revision.
+- Shows local logging status, storage budget usage, active debug session
+  metadata, dropped/suppressed counts, and last cloud log request/result.
+- Shows a read-only local log tail for recent app runtime logs; no send/upload
+  action.
+
+## Local Logging And Cloud Log Requests
+
+The clean app runtime architecture, local log store, logging levels, UI
+adapter, and cloud log-request contract are defined in
+`ha-app-runtime-architecture.md`.
+
+Closed defaults:
+
+- local diagnostic logs are bounded under `/config/logs`
+- default local diagnostic log budget is `32 MiB`
+- oldest retained log segment is overwritten/deleted first
+- routine cloud logging remains collapsed `runtime_log_summary[]`, not raw logs
+- local UI log tail is read-only and display-only
+- cloud-requested app runtime logs use `upload_artifact` with purpose
+  `error_log_bundle`
+- cloud may select by local artifact ref or bounded query selectors, never by
+  arbitrary local path
+- no local "send logs" button; cloud pulls logs through the brokered artifact
+  command path
+- local capture level, routine cloud publish verbosity, and temporary debug
+  capture are separate controls
 
 ## Local Unpair Requirement
 
-The add-on must support local unpair/reset from Home Assistant.
+The app must support local unpair/reset from Home Assistant.
 
 Required behavior:
 
 - Works without cloud connectivity.
 - Stops runtime cloud messaging.
 - Removes or invalidates local claimed-device metadata and local runtime
-  credentials enough that the add-on returns to unclaimed behavior.
+  credentials enough that the app returns to unclaimed behavior.
 - Preserves `installation_id` by default so the next pairing can carry
   recognition context for repair/reconnect/fresh-claim decisions.
 - Does not delete, transfer, release, or revoke the cloud device record by
@@ -361,7 +389,7 @@ This event is best-effort only. Local unpair must not depend on it.
 
 ## Auto-Update, Watchdog, Start On Boot
 
-HomeSignal should not mutate these Home Assistant add-on settings. The UI should
+HomeSignal should not mutate these Home Assistant app settings. The UI should
 show instructions for the user to set them locally.
 
 Instruction-only copy is valid:
@@ -369,9 +397,9 @@ Instruction-only copy is valid:
 - enable Auto update
 - enable Watchdog
 - enable Start on boot
-- install the latest HomeSignal add-on version if Home Assistant shows one
+- install the latest HomeSignal app version if Home Assistant shows one
 
-If Supervisor later exposes reliable read-only values, the add-on may report
+If Supervisor later exposes reliable read-only values, the app may report
 them as optional observed facts. They remain local-only settings.
 
 ## Telemetry Implementation Follow-Up
@@ -386,7 +414,7 @@ Follow-up needed before live wiring:
 - project telemetry freshness
 - project Supervisor status/version
 - project storage details
-- project add-on inventory/activity
+- project app inventory/activity
 - project runtime warning summaries and suppression counters
 - add read-model/API fields for the shell
 

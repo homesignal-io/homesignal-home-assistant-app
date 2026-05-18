@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/database"
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/migration"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/database"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/migration"
 )
 
 func main() {

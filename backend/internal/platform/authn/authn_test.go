@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/domain/ports"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/domain/ports"
 )
 
 func TestBearerToken(t *testing.T) {

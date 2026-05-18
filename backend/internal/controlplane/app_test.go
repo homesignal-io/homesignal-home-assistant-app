@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/config"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
 
 func TestOperationalRoutes(t *testing.T) {
@@ -98,6 +100,160 @@ func TestMethodNotAllowed(t *testing.T) {
 		t.Fatalf("decode response body: %v", err)
 	}
 	assertErrorCode(t, body, "METHOD_NOT_ALLOWED")
+}
+
+func TestPublicRouteFixturesReferenceOpenAPIOperations(t *testing.T) {
+	openAPI, err := os.ReadFile("../../openapi/public-v1.yaml")
+	if err != nil {
+		t.Fatalf("read OpenAPI scaffold: %v", err)
+	}
+	fixturePayload, err := os.ReadFile("../../testdata/api/public-route-fixtures.json")
+	if err != nil {
+		t.Fatalf("read public route fixtures: %v", err)
+	}
+
+	var fixtures []struct {
+		Name           string `json:"name"`
+		Method         string `json:"method"`
+		Path           string `json:"path"`
+		OperationID    string `json:"operation_id"`
+		ExpectedStatus int    `json:"expected_status"`
+	}
+	if err := json.Unmarshal(fixturePayload, &fixtures); err != nil {
+		t.Fatalf("decode public route fixtures: %v", err)
+	}
+
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	for _, fixture := range fixtures {
+		t.Run(fixture.Name, func(t *testing.T) {
+			if !strings.Contains(string(openAPI), "operationId: "+fixture.OperationID) {
+				t.Fatalf("OpenAPI scaffold does not include operationId %q", fixture.OperationID)
+			}
+
+			response := app.Serve(fixture.Method, fixture.Path, nil, nil)
+			if response.StatusCode != fixture.ExpectedStatus {
+				t.Fatalf("status = %d, want %d", response.StatusCode, fixture.ExpectedStatus)
+			}
+			if response.StatusCode == http.StatusNotImplemented && response.Headers["X-HomeSignal-Operation-ID"] != fixture.OperationID {
+				t.Fatalf("operation header = %q, want %q", response.Headers["X-HomeSignal-Operation-ID"], fixture.OperationID)
+			}
+		})
+	}
+}
+
+func TestRegisteredPublicRoutesMustHaveOpenAPIOperations(t *testing.T) {
+	openAPI, err := os.ReadFile("../../openapi/public-v1.yaml")
+	if err != nil {
+		t.Fatalf("read OpenAPI scaffold: %v", err)
+	}
+	openAPIText := string(openAPI)
+
+	for _, route := range publicRouteSpecs {
+		if route.OperationID == "" {
+			t.Fatalf("%s %s has empty operation id", route.Method, route.Pattern)
+		}
+		if !strings.Contains(openAPIText, "operationId: "+route.OperationID) {
+			t.Fatalf("%s %s operationId %q missing from OpenAPI scaffold", route.Method, route.Pattern, route.OperationID)
+		}
+	}
+}
+
+func TestRouteShellAuthBoundaries(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		headers    map[string]string
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name:       "public human route requires auth",
+			method:     http.MethodGet,
+			path:       "/api/v1/dashboard",
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "AUTHENTICATION_REQUIRED",
+		},
+		{
+			name:       "public human route is only shell after auth boundary",
+			method:     http.MethodGet,
+			path:       "/api/v1/dashboard",
+			headers:    map[string]string{"Authorization": "Bearer test-token"},
+			wantStatus: http.StatusNotImplemented,
+			wantCode:   "ROUTE_NOT_IMPLEMENTED",
+		},
+		{
+			name:       "agent route requires device certificate metadata",
+			method:     http.MethodGet,
+			path:       "/agent/commands/cmd_123",
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "DEVICE_CERTIFICATE_REQUIRED",
+		},
+		{
+			name:       "agent route is only shell after certificate boundary",
+			method:     http.MethodGet,
+			path:       "/agent/commands/cmd_123",
+			headers:    map[string]string{"X-HomeSignal-Device-Cert-Fingerprint": "sha256:test"},
+			wantStatus: http.StatusNotImplemented,
+			wantCode:   "ROUTE_NOT_IMPLEMENTED",
+		},
+		{
+			name:       "internal route requires service principal",
+			method:     http.MethodPost,
+			path:       "/internal/alert-candidates",
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   "SERVICE_AUTHENTICATION_REQUIRED",
+		},
+		{
+			name:       "internal route is only shell after service boundary",
+			method:     http.MethodPost,
+			path:       "/internal/alert-candidates",
+			headers:    map[string]string{"X-HomeSignal-Service-Principal": "service:telemetry-ingest"},
+			wantStatus: http.StatusNotImplemented,
+			wantCode:   "ROUTE_NOT_IMPLEMENTED",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := app.Serve(tt.method, tt.path, tt.headers, nil)
+			if response.StatusCode != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", response.StatusCode, tt.wantStatus)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(response.Body, &body); err != nil {
+				t.Fatalf("decode response body: %v", err)
+			}
+			assertErrorCode(t, body, tt.wantCode)
+		})
+	}
+}
+
+func TestEnrollmentShellDisablesCaching(t *testing.T) {
+	app := New(config.Config{
+		Environment: "test",
+		ServiceName: "control-plane",
+		Version:     "test-version",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	response := app.Serve(http.MethodPost, "/api/v1/device-enrollment/claim-invites/verify", nil, nil)
+	if response.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusNotImplemented)
+	}
+	if response.Headers["Cache-Control"] != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", response.Headers["Cache-Control"])
+	}
 }
 
 func assertErrorCode(t *testing.T, body map[string]any, want string) {

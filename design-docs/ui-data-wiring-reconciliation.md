@@ -51,7 +51,7 @@ business logic.
   `design-docs/telemetry-ingest-architecture.md:847`,
   `design-docs/telemetry-ingest-architecture.md:874`, and
   `design-docs/telemetry-ingest-architecture.md:1169`.
-- Add-on update backing is in `design-docs/update-architecture.md:430`,
+- App update backing is in `design-docs/update-architecture.md:430`,
   `design-docs/update-architecture.md:440`, `design-docs/update-architecture.md:442`,
   and `design-docs/update-architecture.md:445`.
 - Implementation-plan slices for alert recipients and notification attempts are in
@@ -64,7 +64,7 @@ business logic.
 
 | ID | UI value | State | Contract clarity | Reconciliation |
 | --- | --- | --- | --- | --- |
-| 1 | Dashboard state label / action required | Backed | Clear | Backing fields exist in presence, backup status, add-on version drift, Home Assistant version drift, storage status, and latest state. API returns computed dashboard state from the v0 issue projection. |
+| 1 | Dashboard state label / action required | Backed | Clear | Backing fields exist in presence, backup status, app version drift, Home Assistant version drift, storage status, and latest state. API returns computed dashboard state from the v0 issue projection. |
 | 2 | Dashboard affected-site count | Backed | Clear | Count distinct affected sites over total managed sites. This belongs in the dashboard summary response. |
 | 3 | Dashboard hero copy | Backed | Clear enough | API returns a dashboard state plus primary issue summary; portal copy can render from that small enum/summary without raw-service stitching. |
 | 4 | Managed site total | Backed | Clear | Count account-scoped sites. |
@@ -72,7 +72,7 @@ business logic.
 | 6 | Open issue total | Backed | Clear | Count tripped v0 issue projection rows. |
 | 7 | Sites with issues | Backed | Clear | Count distinct sites with one or more v0 issue projection rows. |
 | 8 | Backup issues | Backed | Clear | Backup status is owned by Backup Service. V0 issue projection includes `backup_failed` and `backup_overdue`. |
-| 9 | Add-on drift | Backed | Clear | Compare reported add-on version/status with desired/latest release state. |
+| 9 | App drift | Backed | Clear | Compare reported app version/status with desired/latest release state. |
 | 10 | Email alerts | Backed | Clear | Alert recipient/preference contract is v0: verified email recipients, enabled subscriptions, optional site scope, and notification attempt metadata. |
 
 ## Managed Home Assistant Rows
@@ -95,7 +95,7 @@ business logic.
 | 24 | Devices page fleet count | Backed | Clear | Count devices and sites visible to the account/user. |
 | 30 | Site/home icon | Backed | Clear | `site_category` is optional presentation-only Account/Site data. UI shows inline icon before site name and falls back to the default Home Assistant/site icon. |
 | 31 | Issue severity / indicator color | Backed | Clear | Use issue projection `severity`: `critical`, `warning`, or `info`. |
-| 32 | Add-on update drift | Backed | Clear | Add-on desired/reported version comparison is explicitly part of update architecture. |
+| 32 | App update drift | Backed | Clear | App desired/reported version comparison is explicitly part of update architecture. |
 
 ## Activity Timeline
 
@@ -117,7 +117,7 @@ These product calls are now locked for v0.
      `device_id`, `source_area`, `sort_priority`, `primary_action`.
    - This is API facade/read-model work, not a new domain service.
    - V0 issue codes: `device_disconnected`, `backup_failed`,
-     `backup_overdue`, `addon_update_attention`, `ha_update_advisory`, and
+     `backup_overdue`, `app_update_attention`, `ha_update_advisory`, and
      `storage_warning`.
    - Judgment call: calculate issue rows server-side so Dashboard and Devices
      never disagree about what needs review.

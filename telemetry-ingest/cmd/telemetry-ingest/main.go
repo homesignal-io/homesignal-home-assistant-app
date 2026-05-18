@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/homesignal-io/homesignal-home-assistant/telemetry-ingest/internal/app"
-	"github.com/homesignal-io/homesignal-home-assistant/telemetry-ingest/internal/pipeline"
+	"github.com/homesignal-io/homesignal-home-assistant-app/telemetry-ingest/internal/app"
+	"github.com/homesignal-io/homesignal-home-assistant-app/telemetry-ingest/internal/pipeline"
 )
 
 var (

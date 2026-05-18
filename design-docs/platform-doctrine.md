@@ -49,7 +49,7 @@ Avoid:
 - spreading authorization decisions into route handlers or service-specific ad hoc checks
 - creating broad MQTT topic rules before the exact runtime contract is known
 - allowing service plans to invent their own logging, secrets, deploy, or test conventions
-- using the add-on as a hidden privileged remote shell
+- using the app as a hidden privileged remote shell
 - letting future architecture claims masquerade as implemented behavior
 
 ## Architecture Versus Implementation

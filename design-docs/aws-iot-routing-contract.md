@@ -15,7 +15,7 @@ Canonical device lifecycle, trust, and authority rules live in `workstreams/devi
 - Use AWS IoT Rules SQL to enrich optional MQTT ingest messages with broker-known metadata and MQTT5 properties.
 - Use AWS IoT Basic Ingest only when a runtime family deliberately chooses AWS IoT Rules routing instead of Agent HTTPS.
 - Use AWS IoT named shadows through the Edge State Adapter for compact desired/reported edge state.
-- Use the normal MQTT broker path for cloud-to-device notifications and commands because the add-on subscribes to them.
+- Use the normal MQTT broker path for cloud-to-device notifications and commands because the app subscribes to them.
 - Treat payload device identifiers as annotations, not authority.
 - Keep registration/bootstrap topics separate from claimed-device runtime topics.
 
@@ -62,9 +62,9 @@ homesignal/devices/{device_id}/events
 
 `telemetry` is reported current/latest state. It is snapshot-oriented, dedupe-friendly, and usually updates read models.
 
-`events` are occurrences. They are append-oriented and represent something that happened, such as a Home Assistant event, `agent_alarm`, command lifecycle update, or notable add-on system event.
+`events` are occurrences. They are append-oriented and represent something that happened, such as a Home Assistant event, `agent_alarm`, command lifecycle update, or notable app system event.
 
-Cloud-to-device command delivery uses the normal MQTT broker path because the add-on subscribes to command messages. Device-originated command ACK facts may return through the Agent HTTPS API or another command-specific authenticated return path. Artifact upload completion/result uses the mTLS Agent HTTPS API.
+Cloud-to-device command delivery uses the normal MQTT broker path because the app subscribes to command messages. Device-originated command ACK facts may return through the Agent HTTPS API or another command-specific authenticated return path. Artifact upload completion/result uses the mTLS Agent HTTPS API.
 
 AWS IoT named shadow reserved topics are not HomeSignal runtime telemetry/event topic families. They are owned through `edge-state-adapter.md`.
 
@@ -90,7 +90,7 @@ HomeSignal has two logical cloud-to-device classes:
 | Class | Contract | Examples |
 | --- | --- | --- |
 | Notification | Fire-and-forget hint. No ACK expected. Cloud must not assume local state changed because a notification was published. | "Policy changed, check in soon", reconnect nudges, low-risk hints. |
-| Command | ACK/result required. Has command identity, expiry, allowlisted type, short-window accepted/rejected ACK, and terminal result reporting from the add-on. | `refresh_publish_policy`, backup trigger, update status/repair where explicitly supported, release/revoke convergence, future diagnostics or artifact upload. |
+| Command | ACK/result required. Has command identity, expiry, allowlisted type, short-window accepted/rejected ACK, and terminal result reporting from the app. | `refresh_publish_policy`, backup trigger, update status/repair where explicitly supported, release/revoke convergence, future diagnostics or artifact upload. |
 
 Default cloud-to-device topic families:
 
@@ -101,7 +101,7 @@ homesignal/devices/{device_id}/commands
 
 Active publish-policy version is durable desired state and should normally be delivered through the Edge State Adapter and AWS IoT named shadows. A notification may be used only as a convergence hint. `refresh_publish_policy` remains command-class when cloud needs a bounded repair/acceleration attempt with ACK/result semantics.
 
-The first ACK path should use the authenticated Agent HTTPS API unless a command-specific spec chooses another authenticated return path. ACK means add-on accepted or rejected the command, not mere packet receipt. Artifact upload completion/result uses the mTLS Agent HTTPS API. Command lifecycle semantics are defined in `command-lifecycle.md`.
+The first ACK path should use the authenticated Agent HTTPS API unless a command-specific spec chooses another authenticated return path. ACK means app accepted or rejected the command, not mere packet receipt. Artifact upload completion/result uses the mTLS Agent HTTPS API. Command lifecycle semantics are defined in `command-lifecycle.md`.
 
 Do not deploy broad catch-all runtime rules such as:
 
@@ -167,7 +167,7 @@ Every claimed-device runtime publish must include exactly one value for each req
 | `schema_type` | Exact contract name, such as `device.health_snapshot` |
 | `schema_version` | Positive integer encoded as a string |
 | `message_id` | Device-generated opaque ID, preferably ULID or UUID |
-| `applied_publish_policy_version` | Opaque server-issued publish-policy version the add-on enforced |
+| `applied_publish_policy_version` | Opaque server-issued publish-policy version the app enforced |
 | `observed_at` | Device-observed RFC3339 timestamp for the facts |
 
 Recommended MQTT5 standard properties:
@@ -205,7 +205,7 @@ critical
 
 Repeated identical `agent_alarm` events should collapse by device, alarm type, and time window while preserving first seen, last seen, count, and sample provenance.
 
-`agent_alarm` also covers add-on enforcement failures that HomeSignal should know about even when they are not customer-visible. Initial alarm types include:
+`agent_alarm` also covers app enforcement failures that HomeSignal should know about even when they are not customer-visible. Initial alarm types include:
 
 ```text
 potential_abuse_detected
@@ -216,11 +216,11 @@ artifact_upload_failed
 
 Policy-apply alarms must carry only bounded structured fields such as attempted policy version, active policy version, command ID, reason code, and severity. They may include a redacted diagnostic excerpt capped at 5 KB total. If additional logs exist locally, set `more_logs_available=true` and include a local correlation/reference ID that a later artifact-upload command can reference. Do not include large logs, full policy documents, signed URLs, secrets, or local file contents beyond the bounded redacted excerpt in MQTT payloads.
 
-Artifact-upload failure alarms must not recursively request more logs. If an error occurs while uploading an `error_log_bundle`, the add-on may emit one bounded `artifact_upload_failed` event with `more_logs_available=false`, then collapse repeats by device, artifact purpose, failure reason, and time window.
+Artifact-upload failure alarms must not recursively request more logs. If an error occurs while uploading an `error_log_bundle`, the app may emit one bounded `artifact_upload_failed` event with `more_logs_available=false`, then collapse repeats by device, artifact purpose, failure reason, and time window.
 
-Event publish budgets are provisioned by the cloud and enforced hard by the add-on from the last accepted policy. Cloud ingest independently enforces current server policy, so entitlement changes apply in cloud immediately even if the add-on has not refreshed yet.
+Event publish budgets are provisioned by the cloud and enforced hard by the app from the last accepted policy. Cloud ingest independently enforces current server policy, so entitlement changes apply in cloud immediately even if the app has not refreshed yet.
 
-The add-on receives resolved effective publish policy, not plan/tier labels. Policy can enable interval-based telemetry snapshots and separate live event budgets. In v0, paid/live events are modeled but not exposed: snapshots plus internal `agent_alarm` are the practical runtime surface.
+The app receives resolved effective publish policy, not plan/tier labels. Policy can enable interval-based telemetry snapshots and separate live event budgets. In v0, paid/live events are modeled but not exposed: snapshots plus internal `agent_alarm` are the practical runtime surface.
 
 Conservative default when publish policy is missing, expired, unreadable, or invalid:
 

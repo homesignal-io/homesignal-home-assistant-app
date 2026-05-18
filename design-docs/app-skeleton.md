@@ -1,12 +1,12 @@
-# HomeSignal Home Assistant Add-On Skeleton
+# HomeSignal Home Assistant App Skeleton
 
 ## Summary
-Create a local-build Home Assistant add-on under `addons/homesignal` named **HomeSignal** with slug `homesignal`. It will run a small Go agent with health/status/version/UI routes, persistent local identity in `/config/device.json`, optional options parsing from `/data/options.json`, and narrow Home Assistant Supervisor/Core API permissions.
+Create a local-build Home Assistant app under `apps/homesignal` named **HomeSignal** with slug `homesignal`. It will run a small Go agent with health/status/version/UI routes, persistent local identity in `/config/device.json`, optional options parsing from `/data/options.json`, and narrow Home Assistant Supervisor/Core API permissions.
 
-This is only the HA add-on skeleton. It will not implement enrollment, cloud auth, telemetry, topology discovery, backup actions, update orchestration, IoT Core, or command execution.
+This is only the HA app skeleton. It will not implement enrollment, cloud auth, telemetry, topology discovery, backup actions, update orchestration, IoT Core, or command execution.
 
 ## Key Changes
-- Add add-on package files: `config.yaml`, `Dockerfile`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `translations/en.yaml`, `Makefile`, and `cmd/agent/main.go`.
+- Add app package files: `config.yaml`, `Dockerfile`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `translations/en.yaml`, `Makefile`, and `cmd/agent/main.go`.
 - `config.yaml` will define:
   - `name: HomeSignal`
   - `slug: homesignal`
@@ -48,4 +48,4 @@ This is only the HA add-on skeleton. It will not implement enrollment, cloud aut
 - No production registry image or publish pipeline in Feature 1.
 - No storage fallback: require `addon_config:rw` and `/config`.
 - Missing `SUPERVISOR_TOKEN` means degraded API access, not failed startup.
-- Current Home Assistant add-on config behavior follows the official add-on configuration and testing docs: [configuration](https://developers.home-assistant.io/docs/add-ons/configuration), [testing](https://developers.home-assistant.io/docs/add-ons/testing).
+- Current Home Assistant app config behavior should continue to follow the official Home Assistant package configuration and testing guidance.

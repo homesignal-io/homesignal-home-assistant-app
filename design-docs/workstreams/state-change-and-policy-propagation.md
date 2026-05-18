@@ -1,12 +1,12 @@
 # State Change And Policy Propagation Workstream
 
-State change and policy propagation governs cloud-authoritative product policy that must be enforced locally by the add-on or future supervisor. It covers desired state, cloud-provisioned local policy, entitlement-derived limits, scoped policy refresh, ACK/result reporting, and stale-policy behavior.
+State change and policy propagation governs cloud-authoritative product policy that must be enforced locally by the app or future supervisor. It covers desired state, cloud-provisioned local policy, entitlement-derived limits, scoped policy refresh, ACK/result reporting, and stale-policy behavior.
 
 ## Agent Use
 
 Read this when touching:
 
-- cloud-provisioned add-on configuration
+- cloud-provisioned app configuration
 - event publish budgets
 - plan or entitlement limits that affect device behavior
 - desired state sent to a device
@@ -30,7 +30,7 @@ Read this when touching:
 ## Principles
 
 - Cloud product policy is authoritative for cloud-side enforcement immediately.
-- The add-on enforces the last accepted cloud policy locally.
+- The app enforces the last accepted cloud policy locally.
 - Remote refresh accelerates convergence, but correctness must not depend on it.
 - Missing, expired, or stale local policy must fail to a conservative default, not unlimited behavior.
 - Devices must not infer business entitlement from ownership alone.
@@ -58,7 +58,7 @@ business policy changes
   -> cloud may send a fire-and-forget notification or ACK-required command only to accelerate or repair convergence
 ```
 
-Local add-on behavior:
+Local app behavior:
 
 ```text
 last accepted policy exists and is fresh
@@ -87,7 +87,7 @@ Cloud-to-device message classes:
 
 Active publish policy is durable desired state through the Edge State Adapter. `refresh_publish_policy` is command-class only when cloud needs a bounded repair/acceleration attempt. A separate policy-changed hint may be modeled as a notification, but notification delivery alone is never proof of local convergence.
 
-Command ACK semantics are defined in `command-lifecycle.md`: ACK means the add-on accepted or rejected the command within the ACK window, not mere packet receipt. Progress is opt-in by command type. Terminal result and desired-state convergence are separate facts.
+Command ACK semantics are defined in `command-lifecycle.md`: ACK means the app accepted or rejected the command within the ACK window, not mere packet receipt. Progress is opt-in by command type. Terminal result and desired-state convergence are separate facts.
 
 ## State Transition Classification
 
@@ -124,7 +124,7 @@ Known HomeSignal classifications:
 | Apply concrete publish policy version | Desired state, with optional command repair | Publish Policy / Edge State Adapter / Command | Normal path is `homesignal_edge.publish_policy` desired/reported. Use command only when cloud needs a bounded repair/acceleration attempt. |
 | Refresh publish policy | Command | Command / Publish Policy | Scoped convergence accelerator; does not change unrelated config or become the source of durable desired state. |
 | Device suspended, revoked, released, or credential disabled | Desired state, plus possible command | Device Registry | Cloud authority changes immediately; local cleanup/convergence is separate. |
-| Desired agent/add-on/supervisor version | Desired state | Release / Update Orchestrator / Edge State Adapter | V0 update intent lives in `homesignal_edge.update`; CI/CD publishes the add-on version first, then Release / Update Orchestrator promotes desired version/channel for a cohort. The Home Assistant Supervisor/add-on update path performs installation according to local policy. |
+| Desired agent/app/supervisor version | Desired state | Release / Update Orchestrator / Edge State Adapter | V0 update intent lives in `homesignal_edge.update`; CI/CD publishes the app version first, then Release / Update Orchestrator promotes desired version/channel for a cohort. The Home Assistant Supervisor/app update path performs installation according to local policy. |
 | Update status/repair | Command related to desired state | Release / Update Orchestrator / Command | V0 command-class update work is limited to explicitly modeled bounded checks, status, or repair. Stage/apply update commands are future/local-supervisor scope only. |
 | Enabled event families and telemetry cadence | Desired state inside publish policy | Publish Policy | Device sees resolved policy, not plan/tier labels. |
 | Local command/execution policy | Desired state | Future policy owner | Separate from publish policy. |
@@ -135,17 +135,17 @@ Known HomeSignal classifications:
 | Run diagnostic | Command | Diagnostics / Command | Bounded attempt, possibly creates artifact intent. |
 | Upload artifact | Command notice + Agent HTTPS API | Artifact Upload Broker / Command / Agent HTTPS API | Cloud-authorized upload; IoT carries command notice only, mTLS HTTPS handles command details, ACK, signed URL negotiation, completion, and result. |
 | Topology upload enabled/cadence | Desired state or policy | Future topology owner / Publish Policy | Device-initiated availability is only an event. |
-| Topology snapshot available | Device event | Add-on / Telemetry Ingest | Cloud may respond with `upload_artifact`; event is not upload authorization. |
-| Error log available | Device event | Add-on / Telemetry Ingest | Cloud may respond with `upload_artifact`; recursion guard applies. |
+| Topology snapshot available | Device event | App / Telemetry Ingest | Cloud may respond with `upload_artifact`; event is not upload authorization. |
+| Error log available | Device event | App / Telemetry Ingest | Cloud may respond with `upload_artifact`; recursion guard applies. |
 | Policy changed hint | Notification | Device Notification Path | No convergence proof. |
 | Check in soon / reconnect nudge | Notification | Device Notification Path | No product state should depend on delivery. |
 
 Policy application failure:
 
 - Shadow reported state or the command result records the immediate response: attempted policy version, active local policy version, and bounded reason code. Command ID is included only when the failure happened during a command-class attempt.
-- The add-on updates shadow reported state only for desired-state convergence or drift conditions; it must not use shadow reported state as a telemetry heartbeat.
-- If the add-on cannot apply a policy, it must remain on the last accepted policy or conservative default.
-- The add-on should emit an internal `agent_alarm` when policy application fails, because silent local policy drift is operationally important.
+- The app updates shadow reported state only for desired-state convergence or drift conditions; it must not use shadow reported state as a telemetry heartbeat.
+- If the app cannot apply a policy, it must remain on the last accepted policy or conservative default.
+- The app should emit an internal `agent_alarm` when policy application fails, because silent local policy drift is operationally important.
 - Security-relevant failures, such as wrong device, invalid signature/MAC when introduced, rollback attempt, malformed policy from cloud, or repeated invalid policy delivery, should use `agent_alarm` severity `warning` or `critical`.
 - Routine incompatibility failures, such as unsupported future policy schema, should use `warning` unless they leave the device unable to enforce any safe policy.
 - Runtime events and command results must contain only a small structured summary. They may include a redacted diagnostic excerpt capped at 5 KB total when it materially helps triage.
@@ -163,11 +163,11 @@ Event publish budgets:
 - The effective device budget is inherited from the managing plan where the device currently lives.
 - A later business rule may allow an integrator/support provider to raise the effective budget for devices they manage but do not own, but the cloud still resolves that into a per-device policy.
 - The device must not infer budget from owner, manager, account, plan, or tier labels.
-- A stale local budget can only make the add-on more conservative than cloud policy, not more permissive from the cloud's perspective.
+- A stale local budget can only make the app more conservative than cloud policy, not more permissive from the cloud's perspective.
 - Devices receive only the resolved effective publish policy, not plan or tier labels.
 - Every effective publish policy includes `policy_version`, `issued_at`, `refresh_after`, and `expires_at`.
 - Default v0 freshness is `refresh_after=24h` and `expires_at=7d`.
-- When local publish policy is expired, missing, unreadable, or invalid, the add-on falls back to conservative local behavior.
+- When local publish policy is expired, missing, unreadable, or invalid, the app falls back to conservative local behavior.
 - Publish policy includes interval rules for telemetry snapshots and event budgets for live events.
 - Publish policy also carries routine device observability policy: device
   runtime log/event verbosity, diagnostic excerpt allowance, health snapshot
@@ -177,14 +177,14 @@ Event publish budgets:
   through resolved policy.
 - Live event streams are not a v0 product requirement. The policy model keeps
   event-family gates and budgets so live events can be productized later without
-  reworking the add-on/cloud contract, but v0 should not build product pricing
+  reworking the app/cloud contract, but v0 should not build product pricing
   or UX around live event streams.
 - `agent_alarm` is allowed for all claimed devices under a strict internal security budget.
 - Live `ha_event` is disabled by default and only enabled by explicit resolved policy.
 - Every claimed-device runtime publish should report `applied_publish_policy_version` as metadata.
 - V0 starts with a free/default tier for all devices, but the policy model must support admin-defined tiers from the beginning.
 - Admin-defined tiers produce resolved per-device policy records; devices never receive mutable tier names as authority.
-- A tier can change telemetry cadence, backup-summary inclusion, live event allowance, and event budgets without changing the add-on contract.
+- A tier can change telemetry cadence, backup-summary inclusion, live event allowance, and event budgets without changing the app contract.
 - A tier can also change routine device observability verbosity, but `debug`
   verbosity remains time-boxed debug mode rather than a standing policy level.
 - Publish-policy values are durable, auditable records. They should be seeded
@@ -192,7 +192,7 @@ Event publish budgets:
   should consume resolved policy records rather than hard-coded business limits.
 - V0 default values are intentionally coarse. They are expected to become finer
   by plan, site, support relationship, event family, and temporary support
-  override without changing the add-on contract.
+  override without changing the app contract.
 
 V0 free/default publish-policy seed:
 
@@ -315,7 +315,7 @@ Stale policy and convergence visibility:
 
 ## Required Local Plan Checks
 
-Every affected service or add-on plan should state:
+Every affected service or app plan should state:
 
 - state-transition class: desired state, command, notification, or device event
 - authoritative cloud state or policy owner
@@ -348,7 +348,7 @@ The concrete request payload is intentionally minimal: command owner, target dev
 ## Acceptance Criteria
 
 - Cloud services enforce current policy immediately after a state change.
-- Add-on local behavior is bounded by last accepted policy or conservative defaults.
+- App local behavior is bounded by last accepted policy or conservative defaults.
 - Scoped remote refresh is useful but not required for correctness.
 - Publish-policy refresh cannot mutate unrelated local policy or credentials.
 - Missing or stale local policy never becomes unlimited publishing or unsafe execution.

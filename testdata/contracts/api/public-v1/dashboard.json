@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "dashboard_state": "action_required",
+  "summary": {
+    "managed_sites": 2,
+    "managed_devices": 2,
+    "online_devices": 1,
+    "sites_needing_review": 1,
+    "open_issue_count": 3,
+    "backup_issue_count": 1,
+    "app_update_attention_count": 1,
+    "email_alerts_status": "not_configured"
+  },
+  "managed_home_assistants": [
+    {
+      "site_id": "site_124",
+      "site_name": "Lee Residence",
+      "site_category": "home",
+      "customer_display_name": "Jordan Lee",
+      "compact_location": "Columbus, OH",
+      "device": {
+        "device_id": "dev_124",
+        "thing_name": "dev_124",
+        "presence": "disconnected",
+        "last_seen_at": "2026-05-14T07:15:11Z"
+      },
+      "home_assistant": {
+        "installed_version": "2026.5.0",
+        "latest_version": "2026.5.1",
+        "latest_version_source": "catalog"
+      },
+      "supervisor": {
+        "installed_version": "2026.05.0",
+        "latest_version": "2026.05.0"
+      },
+      "ha_app": {
+        "installed_version": "0.1.3",
+        "desired_version": "0.1.4",
+        "release_track": "stable",
+        "update_status": "attention"
+      },
+      "backup": {
+        "status": "failed",
+        "last_success_at": "2026-05-10T05:00:00Z",
+        "last_failure_at": "2026-05-14T05:02:00Z"
+      },
+      "storage": {
+        "status": "warning",
+        "detail": "Storage pressure reported by the app"
+      },
+      "primary_action": "view_backups",
+      "issues": [
+        {
+          "issue_code": "device_disconnected",
+          "severity": "critical",
+          "label": "Disconnected",
+          "detail": "Last seen May 14, 2026, 7:15 AM",
+          "source_area": "presence",
+          "sort_priority": 10,
+          "primary_action": "view_device",
+          "site_id": "site_124",
+          "device_id": "dev_124"
+        },
+        {
+          "issue_code": "backup_failed",
+          "severity": "critical",
+          "label": "Backup failed",
+          "detail": "Last backup attempt failed May 14, 2026, 5:02 AM",
+          "source_area": "backup",
+          "sort_priority": 20,
+          "primary_action": "view_backups",
+          "site_id": "site_124",
+          "device_id": "dev_124"
+        },
+        {
+          "issue_code": "app_update_attention",
+          "severity": "warning",
+          "label": "App update attention",
+          "detail": "HomeSignal app 0.1.4 is desired; device reports 0.1.3",
+          "source_area": "updates",
+          "sort_priority": 40,
+          "primary_action": "view_updates",
+          "site_id": "site_124",
+          "device_id": "dev_124"
+        }
+      ]
+    },
+    {
+      "site_id": "site_123",
+      "site_name": "Smith Residence",
+      "site_category": null,
+      "customer_display_name": "Alex Smith",
+      "compact_location": "Bexley, OH",
+      "device": {
+        "device_id": "dev_123",
+        "thing_name": "dev_123",
+        "presence": "online",
+        "last_seen_at": "2026-05-14T11:59:00Z"
+      },
+      "home_assistant": {
+        "installed_version": "2026.5.1",
+        "latest_version": null,
+        "latest_version_source": "unavailable"
+      },
+      "supervisor": {
+        "installed_version": "2026.05.0",
+        "latest_version": "2026.05.0"
+      },
+      "ha_app": {
+        "installed_version": "0.1.4",
+        "desired_version": "0.1.4",
+        "release_track": "stable",
+        "update_status": "current"
+      },
+      "backup": {
+        "status": "succeeded",
+        "last_success_at": "2026-05-13T05:00:00Z",
+        "last_failure_at": null
+      },
+      "storage": {
+        "status": "healthy",
+        "detail": "Storage is within local policy"
+      },
+      "primary_action": "view_device",
+      "issues": []
+    }
+  ],
+  "activity": [
+    {
+      "activity_id": "act_1001",
+      "occurred_at": "2026-05-14T09:00:00Z",
+      "category": "backup",
+      "action": "failed",
+      "subject_type": "site",
+      "subject_id": "site_124",
+      "subject_label": "Lee Residence",
+      "detail": "Scheduled backup failed",
+      "severity": "critical",
+      "actor_label": "HomeSignal"
+    }
+  ]
+}

@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/controlplane"
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/config"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/controlplane"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
 
 func TestHandleInvocationAdaptsAPIGatewayV2Event(t *testing.T) {

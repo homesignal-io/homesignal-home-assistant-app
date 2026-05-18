@@ -58,13 +58,32 @@ Use these unless the user has already provided a different value:
 | Runtime target | API Gateway-facing Go control-plane skeleton; prefer Lambda or another API Gateway-native integration when it fits |
 | First deployed service | Control-plane skeleton only |
 | First routes | operational `GET /healthz`, `GET /readyz`, and `GET /version` only |
-| DNS/custom domain | Skip at first; use generated AWS endpoint unless already configured |
+| DNS/custom domain | Stage 0 skeleton may skip custom DNS and use the generated AWS endpoint. Domain-backed staging is required before public pairing, browser bridge, HA App environment profiles, email links, or customer/integrator-visible staging UX. |
 | Database | Do not require DB for first skeleton liveness |
 | AWS IoT | Defer until enrollment/device runtime slice |
 | Agent mTLS | Defer until the Agent HTTPS boundary slice |
 | Object storage | Create IaC state or build artifact storage only if the selected deploy path needs it; defer product object storage |
 | Email/Resend | Defer until Notification Service slice |
 | CI/CD | Defer until script-driven staging deploy works |
+
+## Staging Domain Path
+
+Staging has two deploy phases:
+
+1. **Stage 0: skeleton smoke**
+   Use the generated AWS endpoint. Prove artifact build, runtime boot, IaC,
+   deploy script, smoke script, logs, `/healthz`, `/readyz`, and `/version`.
+   Do not expose customer or integrator pairing UX from this endpoint.
+2. **Stage 1: domain-backed staging**
+   Use an owned stable HTTPS domain before enabling public pairing pages,
+   browser localStorage/postMessage bridge behavior, Home Assistant app staging
+   environment profiles, claim flows, email links, or any human-visible staging
+   UX that depends on browser origin trust.
+
+If no domain exists yet, proceed with Stage 0 and record the domain as a Stage
+1 blocker. Do not work around missing DNS by adding a freeform cloud URL field,
+a hidden URL-parameter override, or a generated AWS endpoint to durable Home
+Assistant app environment config.
 
 ## Required First Deploy Shape
 
@@ -146,8 +165,8 @@ If absent, create the minimal backend skeleton from M0:
   `HOMESIGNAL_VERSION`
 - structured startup/request logs with service/environment/version
 
-No database, Cognito, AWS IoT, mTLS, or domain routes are required for first
-deploy.
+No database, Cognito, AWS IoT, mTLS, or domain routes are required for the
+Stage 0 skeleton deploy.
 
 These endpoints are operational liveness/version endpoints, not public
 `/api/v1` product routes or `/agent/*` device routes. Any product route,
@@ -247,7 +266,7 @@ first-deploy inputs are:
 - account security baseline and deploy principal
 - budget/cost alert recipient and initial staging threshold
 - cost allocation tag overrides, if the AWS account requires them
-- hosted zone/domain names if custom DNS is desired
+- hosted zone/domain names before Stage 1 domain-backed staging
 - region override only if the operator explicitly rejects selected `us-east-1`
 - production approval location
 - Neon and Resend account details for later slices

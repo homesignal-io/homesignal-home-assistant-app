@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/homesignal-io/homesignal-home-assistant/telemetry-ingest/internal/pipeline"
+	"github.com/homesignal-io/homesignal-home-assistant-app/telemetry-ingest/internal/pipeline"
 )
 
 func TestHealthAndReadyEndpoints(t *testing.T) {

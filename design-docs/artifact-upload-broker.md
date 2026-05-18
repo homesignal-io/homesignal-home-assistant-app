@@ -1,6 +1,6 @@
 # Artifact Upload Broker Spec
 
-The Artifact Upload Broker is the service boundary for brokered object storage uploads and downloads. This spec exists to prevent topology, diagnostics, backup, or generic object transfer work from leaking into API Facade, Account / Site, or add-on implementation.
+The Artifact Upload Broker is the service boundary for brokered object storage uploads and downloads. This spec exists to prevent topology, diagnostics, backup, or generic object transfer work from leaking into API Facade, Account / Site, or app implementation.
 
 The broker grants temporary object-storage capability. It does not own product state.
 
@@ -15,7 +15,7 @@ Read this before adding or changing any:
 - error log or support log bundle upload
 - backup artifact upload
 - release artifact download
-- add-on file upload behavior
+- app file upload behavior
 - object storage metadata model
 
 Do not implement new generic device-origin artifact transfer until a concrete product flow is approved and reconciled with this spec, `api-facade.md`, `workstreams/local-cloud-trust-boundaries.md`, and the owning flow doc (for example backup or diagnostics).
@@ -31,7 +31,7 @@ owning Diagnostics/Debug flow explicitly creates an allowlisted command/request
 with TTL, redaction, size limits, and audit. They are not a generic v0 upload
 surface and must not be implemented as unsolicited device-originated uploads.
 
-HomeSignal add-on update intent/status is a v0 product capability, but release/update artifact selection and download authority belong to the Release / Update architecture, not to a generic Artifact Upload Broker surface. Do not use update support as a reason to introduce generic object transfer.
+HomeSignal app update intent/status is a v0 product capability, but release/update artifact selection and download authority belong to the Release / Update architecture, not to a generic Artifact Upload Broker surface. Do not use update support as a reason to introduce generic object transfer.
 
 Artifact transfer uses a split control/data pattern:
 
@@ -58,7 +58,7 @@ sequenceDiagram
   participant Backend as Backend / Command Owner
   participant DB as App DB
   participant IoT as AWS IoT Core
-  participant Agent as Agent / Add-on
+  participant Agent as Agent / App
   participant API as Agent HTTPS API
   participant Store as Object Storage
 
@@ -160,7 +160,7 @@ The Artifact Upload Broker does not own:
 - diagnostics request lifecycle
 - backup policy
 - release/update orchestration
-- raw unrestricted file access on the add-on
+- raw unrestricted file access on the app
 - public bucket/object authority
 - permanent device AWS credentials
 
@@ -188,7 +188,7 @@ Required guardrails:
 - checksum support when practical
 - unguessable object keys
 - object key generated server-side
-- no AWS credentials delivered to the add-on
+- no AWS credentials delivered to the app
 - no signed URLs over IoT Core
 - no logging of full signed URLs
 - completion/result reporting
@@ -201,11 +201,11 @@ HomeSignal does not own device PKI in v0.
 
 V0 direction:
 
-- The add-on generates the private key locally.
-- The add-on submits a CSR through the HomeSignal claim flow.
+- The app generates the private key locally.
+- The app submits a CSR through the HomeSignal claim flow.
 - HomeSignal coordinates AWS IoT `CreateCertificateFromCsr`.
 - AWS IoT signs the CSR and returns `certificatePem`, `certificateId`, and `certificateArn`.
-- HomeSignal returns `certificatePem` to the add-on and stores the AWS certificate identifiers plus derived certificate metadata.
+- HomeSignal returns `certificatePem` to the app and stores the AWS certificate identifiers plus derived certificate metadata.
 - HomeSignal never receives or stores the device private key.
 - The HTTPS edge, preferably API Gateway HTTP API custom domain for v0, validates presented client certificates against a truststore.
 - The truststore is a CA allowlist stored/configured for the edge; it is not a per-device database and it does not contain private keys.
@@ -245,11 +245,11 @@ Endpoint rules:
 - upload completion verifies the upload belongs to the authenticated device and command
 - command result verifies the command belongs to the authenticated device
 
-## Add-On Local Gate
+## App Local Gate
 
-The add-on must not accept arbitrary upload commands.
+The app must not accept arbitrary upload commands.
 
-Future add-on artifact behavior must be allowlisted by artifact type. The cloud may request a known artifact type; it must not provide an arbitrary local file path.
+Future app artifact behavior must be allowlisted by artifact type. The cloud may request a known artifact type; it must not provide an arbitrary local file path.
 
 Allowed future shape:
 
@@ -266,7 +266,7 @@ Disallowed shape:
 upload arbitrary local file path
 ```
 
-The add-on must validate:
+The app must validate:
 
 - command type is allowlisted
 - artifact type maps to locally generated content
@@ -307,7 +307,7 @@ A brokered artifact record should include:
 - expected size or max size
 - checksum, when provided
 - trigger event ID, command ID, or diagnostic request ID
-- local artifact reference, when supplied by the add-on
+- local artifact reference, when supplied by the app
 - redaction profile
 - manifest object key or manifest checksum, when applicable
 - status
@@ -328,7 +328,7 @@ Known future purposes:
 - `backup_artifact`
 - `release_artifact`
 
-`error_log_bundle` is for large logs associated with a specific command, policy application failure, diagnostic request, or add-on incident. It is a brokered artifact, not an MQTT event. The corresponding MQTT event or command result may carry a redacted diagnostic excerpt capped at 5 KB total, plus `more_logs_available` and a local correlation/upload request ID.
+`error_log_bundle` is for large logs associated with a specific command, policy application failure, diagnostic request, or app incident. It is a brokered artifact, not an MQTT event. The corresponding MQTT event or command result may carry a redacted diagnostic excerpt capped at 5 KB total, plus `more_logs_available` and a local correlation/upload request ID.
 
 Upload-failure recursion guard:
 
@@ -354,9 +354,9 @@ Default size limits by purpose:
 | Purpose | Default max | Content expectations |
 | --- | ---: | --- |
 | `error_log_bundle` | 5 MB | Redacted text, NDJSON, JSON, or compressed text logs. No secrets, private keys, claim invite codes, full signed URLs, or raw local config dumps. |
-| `diagnostic_bundle` | 25 MB | Redacted JSON/text reports, health snapshots, selected add-on logs, and optional compressed bundle manifest. No broad Home Assistant config snapshot in v0. |
+| `diagnostic_bundle` | 25 MB | Redacted JSON/text reports, health snapshots, selected app logs, and optional compressed bundle manifest. No broad Home Assistant config snapshot in v0. |
 | `debug_bundle` | 25 MB | Time-boxed support/debug capture for one device or site. Redacted logs, command summaries, connectivity checks, and runtime facts only. |
-| `topology_snapshot` | 10 MB | JSON or compressed JSON produced by the add-on. Not v0 unless topology upload is approved. |
+| `topology_snapshot` | 10 MB | JSON or compressed JSON produced by the app. Not v0 unless topology upload is approved. |
 | `backup_artifact` | 250 MB | Purpose-owned Home Assistant backup payload or manifest. V0 only under Backup Service ownership. |
 | `release_artifact` | Purpose-owned | Release/update architecture owns download authority and artifact size, not generic upload. |
 
@@ -381,7 +381,7 @@ Every upload session should include expected max size, content type, checksum wh
 - A product-specific service spec identifies the artifact purpose and owning domain service.
 - IoT Core carries only the tiny command notice; Agent HTTPS API handles command detail, ACK, upload negotiation, completion, and result.
 - Device-originated availability events are small hints, not upload authorization.
-- Authorization action and local add-on gate are defined.
+- Authorization action and local app gate are defined.
 - Signed URL TTL, method, content type, size, and object key scope are defined.
 - `/agent/*` mTLS trust boundary is defined.
 - Certificate fingerprint/serial maps to `device_id -> site_id -> org_id`.

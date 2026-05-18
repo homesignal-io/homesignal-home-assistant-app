@@ -29,7 +29,7 @@ Read this when touching:
 - claim verifications
 - device registry records
 - SaaS claim flows
-- add-on enrollment state
+- app enrollment state
 - AWS IoT CSR signing/provisioning adapter behavior
 - final claim confirmation
 - AWS IoT credential mapping
@@ -58,7 +58,7 @@ HomeSignal device lifecycle states:
 
 ```text
 local installation
-  -> unclaimed add-on
+  -> unclaimed app
   -> pairing/provisioning pending
   -> AWS IoT credential issued
   -> HomeSignal claim finalized
@@ -76,17 +76,17 @@ Durable product identity:
 - `device_id`
 - issued by HomeSignal
 - created during claim finalization, after HomeSignal has authorized the site/account claim intent and before claimed runtime operation begins
-- stable across add-on restarts and AWS IoT reconnects
+- stable across app restarts and AWS IoT reconnects
 - remains the continuity key for product history and time-series/read-model continuity
 - may survive credential rotation or re-pairing when the same product device should remain continuous
 
 Local installation identity:
 
-- generated and stored by the add-on before claim
+- generated and stored by the app before claim
 - helps correlate pairing/provisioning attempts
 - does not become cloud authority by itself
 - must not be silently rebound to another site after claim
-- may be lost if the user wipes add-on config
+- may be lost if the user wipes app config
 
 AWS IoT transport identity:
 
@@ -100,7 +100,7 @@ AWS IoT transport identity:
 - AWS IoT Thing name equals HomeSignal `device_id` for claimed devices
 - MQTT client ID must equal AWS IoT Thing name for claimed runtime connections
 - certificate/principal material is replaceable transport credential material
-- private key is generated and retained locally by the add-on; HomeSignal must not receive or store it
+- private key is generated and retained locally by the app; HomeSignal must not receive or store it
 - certificate PEM may pass through HomeSignal during claim but does not need to be persisted after derived certificate identity fields are stored
 - AWS IoT Core owns transport authentication, policy enforcement, and transport provenance
 - not product ownership, site authority, or history authority
@@ -129,7 +129,7 @@ These are evidence or annotations. They are never the sole authority for product
 - HomeSignal `device_id` is the durable product device identity.
 - For claimed devices, HomeSignal `device_id`, AWS IoT Thing name, and required MQTT client ID are the same durable identifier.
 - Postgres/HomeSignal domain state is the source of product authority for account, site, claim, release, transfer, revoke, and audit state.
-- HomeSignal is not irrevocable MDM for a Home Assistant installation. A local Home Assistant administrator can remove the add-on or reset HomeSignal local identity.
+- HomeSignal is not irrevocable MDM for a Home Assistant installation. A local Home Assistant administrator can remove the app or reset HomeSignal local identity.
 - Local reset breaks the local administrative link, but it does not grant authority to mutate prior cloud account records.
 - AWS IoT Core authenticates and routes transport, enforces certificate/client/Thing policy, and owns transport provenance. It does not decide HomeSignal account/site ownership.
 - AWS IoT credentials are recorded under the HomeSignal `device_id`; they are not a separate runtime join key for product identity.
@@ -147,27 +147,27 @@ These are evidence or annotations. They are never the sole authority for product
 
 ### Local Installation
 
-The add-on exists locally but is not yet trusted by HomeSignal for runtime operation.
+The app exists locally but is not yet trusted by HomeSignal for runtime operation.
 
 Trust mechanics:
 
-- add-on may create local installation identity and local key material
+- app may create local installation identity and local key material
 - cloud has no claimed device authority yet
 - browser/local UI can display local status but cannot create durable cloud authority alone
 - no operational commands are accepted
 
 Owning docs/services:
 
-- add-on implementation
-- add-on security docs
+- app implementation
+- app security docs
 
-### Unclaimed Add-On
+### Unclaimed App
 
-The add-on can start enrollment but is not yet a claimed runtime device.
+The app can start enrollment but is not yet a claimed runtime device.
 
 Trust mechanics:
 
-- direct add-on-to-cloud API is allowed only for enrollment/bootstrap
+- direct app-to-cloud API is allowed only for enrollment/bootstrap
 - claim invite codes expire, are single-use, and are verified before confirmation
 - claim verification tokens are short-lived
 - no claimed-device MQTT runtime traffic is accepted
@@ -177,20 +177,20 @@ Owning docs/services:
 
 - API Facade
 - Enrollment / Device Registry
-- add-on enrollment state
+- app enrollment state
 
 ### Pairing And Provisioning Pending
 
-A SaaS user/account/site has expressed claim intent, and the add-on is trying to become a claimed device.
+A SaaS user/account/site has expressed claim intent, and the app is trying to become a claimed device.
 
 Trust mechanics:
 
 - authenticated SaaS user authorizes site/account claim intent
 - HomeSignal backend is the business authority for claim authorization
-- the add-on generates a private key locally and submits a CSR through the HomeSignal claim flow
+- the app generates a private key locally and submits a CSR through the HomeSignal claim flow
 - HomeSignal coordinates AWS IoT certificate signing through `CreateCertificateFromCsr`
 - AWS IoT returns `certificatePem`, `certificateId`, and `certificateArn`
-- HomeSignal returns the certificate PEM to the add-on and stores AWS certificate identifiers plus derived fingerprint, serial, and issuer metadata
+- HomeSignal returns the certificate PEM to the app and stores AWS certificate identifiers plus derived fingerprint, serial, and issuer metadata
 - HomeSignal must not receive or store the device private key
 - first valid claim wins
 - claim attempts and outcomes are audited
@@ -200,10 +200,10 @@ Default flow:
 
 ```text
 web portal creates site-bound claim invite
-  -> unclaimed add-on verifies invite code and displays invite context
+  -> unclaimed app verifies invite code and displays invite context
   -> local user confirms the invite details
   -> HomeSignal API enrollment endpoints over HTTPS under /api/v1
-  -> local add-on CSR
+  -> local app CSR
   -> HomeSignal-authorized AWS IoT CreateCertificateFromCsr
   -> AWS IoT certificate/policy/Thing binding via provisioning adapter
   -> HomeSignal finalization
@@ -287,7 +287,7 @@ Trust mechanics:
 - cloud authority changes immediately
 - device is no longer authorized for normal claimed runtime operation under the released site/account
 - AWS IoT certificate/policy binding is disabled, revoked, or otherwise made unusable for claimed runtime traffic according to the release/revoke flow
-- local add-on cleanup removes cloud runtime credentials and claimed-device config when the release command converges locally
+- local app cleanup removes cloud runtime credentials and claimed-device config when the release command converges locally
 - historical product data remains attached to the prior `device_id`
 
 Owning docs/services:
@@ -298,13 +298,13 @@ Owning docs/services:
 
 ### Re-Pairing And Repair
 
-Re-pairing is a new enrollment attempt from an add-on that may or may not represent a previously claimed HomeSignal device.
+Re-pairing is a new enrollment attempt from an app that may or may not represent a previously claimed HomeSignal device.
 
 Trust mechanics:
 
-- an add-on must not self-assert an old `device_id` during re-pairing
+- an app must not self-assert an old `device_id` during re-pairing
 - if local claimed config is intact, repair/credential rotation may preserve the same `device_id`
-- if local claimed config is missing or wiped, the add-on behaves as an unclaimed installation
+- if local claimed config is missing or wiped, the app behaves as an unclaimed installation
 - reattaching to an existing `device_id` requires explicit cloud-authorized repair/reconnect behavior
 - otherwise, successful enrollment creates a new `device_id`
 - recognition signals may inform the repair/reconnect UX or support workflow, but they do not authorize identity continuity by themselves
@@ -317,37 +317,37 @@ Owning docs/services:
 
 ### Local Config Wipe
 
-A local config wipe means the add-on no longer has its cached claimed-device configuration or credential bundle.
+A local config wipe means the app no longer has its cached claimed-device configuration or credential bundle.
 
 Trust mechanics:
 
 - cloud does not treat a config wipe as release by itself
 - the prior cloud device remains in its last known cloud lifecycle state until release, revoke, repair, or timeout/remediation policy changes it
 - the old device may appear offline or unhealthy
-- the local add-on returns to unclaimed behavior and must enroll again
+- the local app returns to unclaimed behavior and must enroll again
 - local files or user-entered values cannot restore claimed state without cloud authorization
-- a local Home Assistant administrator is allowed to intentionally reset HomeSignal identity and return the add-on to unclaimed behavior
+- a local Home Assistant administrator is allowed to intentionally reset HomeSignal identity and return the app to unclaimed behavior
 - local reset does not delete, transfer, or mutate prior cloud account records by itself
 
 Owning docs/services:
 
-- add-on implementation
+- app implementation
 - Enrollment / Device Registry
 - Device Health
 
 ### Recognition Signals
 
-Recognition signals are non-authoritative hints collected during enrollment or repair to help identify whether an add-on resembles a prior installation.
+Recognition signals are non-authoritative hints collected during enrollment or repair to help identify whether an app resembles a prior installation.
 
 Initial candidate signals:
 
-- add-on `installation_id`, if present
+- app `installation_id`, if present
 - Home Assistant instance ID, if available
 - Supervisor or host installation/machine identifier, if available and appropriate
 - hostname
 - Home Assistant version
 - Supervisor version
-- add-on version
+- app version
 - operating system or environment type
 - CSR hash for the current enrollment attempt
 
@@ -355,21 +355,21 @@ Trust mechanics:
 
 - recognition signals are advisory only
 - recognition signals may support repair prompts, fraud/risk checks, support workflows, or audit context
-- recognition signals must not silently attach an add-on to an existing `device_id`
+- recognition signals must not silently attach an app to an existing `device_id`
 - browser location is not used as a recognition signal
 
 ### Claim Context Resolution
 
-Claim context resolution starts in the web/SaaS portal when an authorized user creates a site-bound claim invite, then continues locally when the add-on verifies the invite code and presents the attached integrator/site/customer context for confirmation.
+Claim context resolution starts in the web/SaaS portal when an authorized user creates a site-bound claim invite, then continues locally when the app verifies the invite code and presents the attached integrator/site/customer context for confirmation.
 
 Trust mechanics:
 
 - the web UI creates the claim invite because it has the authenticated user, account, site, customer, and permission context
-- the add-on supplies the claim invite code, local installation data, recognition signals, and CSR hash for verification
-- the local add-on UI owns the final human confirmation after showing the invite's integrator, creator, site, and customer details
+- the app supplies the claim invite code, local installation data, recognition signals, and CSR hash for verification
+- the local app UI owns the final human confirmation after showing the invite's integrator, creator, site, and customer details
 - same-account or same-site matches may offer repair/reconnect of the existing HomeSignal device
 - different-account or different-integrator matches must not expose or mutate the prior account's records unless the logged-in user has authority over that account
-- a logged-in user without authority over the prior account may make a fresh claim for the local installation when local admin control has reset or re-paired the add-on
+- a logged-in user without authority over the prior account may make a fresh claim for the local installation when local admin control has reset or re-paired the app
 - a fresh claim creates a new `device_id` and new AWS IoT credentials under the claiming account/site
 - the old cloud record remains protected by its original account authority and should appear disconnected when its old credentials stop reporting
 - do not use `stale`, `superseded`, or `conflicted` as fresh-claim lifecycle end states
@@ -471,7 +471,7 @@ Every affected local plan should state:
 - whether topic/payload IDs are claims, checks, or ignored
 - how account/site/device authority is resolved
 - audit events
-- local add-on state changes
+- local app state changes
 - AWS IoT side effects
 - finalization and conflict behavior
 - rollback/remediation path for partial success
@@ -481,10 +481,10 @@ Every affected local plan should state:
 
 - V0 resolution for expired/conflicted claim invites and verifications is explicit in `enrollment-claiming-contract.md`:
   - Expired claim invites fail with `CLAIM_INVITE_EXPIRED` and require the integrator to create a fresh invite.
-  - Expired claim verifications fail with `CLAIM_VERIFICATION_EXPIRED` and require the add-on to verify the invite again if the invite is still open.
+  - Expired claim verifications fail with `CLAIM_VERIFICATION_EXPIRED` and require the app to verify the invite again if the invite is still open.
   - Conflicted matches present only policy-permitted actions; same-account/site may include `repair_existing_device`, cross-account matches expose only `fresh_claim` when local reset/re-pairing is present.
   - No cross-account mutation is allowed.
-- V0 post-claim direct add-on API exception: none. `POST /api/v1` surface is limited to enrollment/bootstrap. All additional post-claim add-on traffic uses approved `/agent/*` HTTPS flows.
+- V0 post-claim direct app API exception: none. `POST /api/v1` surface is limited to enrollment/bootstrap. All additional post-claim app traffic uses approved `/agent/*` HTTPS flows.
 
 ## Acceptance Criteria
 

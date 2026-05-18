@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/domain/ports"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/domain/ports"
 )
 
 var actionPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$`)

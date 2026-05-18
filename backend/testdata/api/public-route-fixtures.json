@@ -1,0 +1,16 @@
+[
+  {
+    "name": "dashboard read model shell",
+    "method": "GET",
+    "path": "/api/v1/dashboard",
+    "operation_id": "getDashboard",
+    "expected_status": 401
+  },
+  {
+    "name": "claim invite verification shell",
+    "method": "POST",
+    "path": "/api/v1/device-enrollment/claim-invites/verify",
+    "operation_id": "verifyClaimInvite",
+    "expected_status": 501
+  }
+]

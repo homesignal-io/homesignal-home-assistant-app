@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "activity": [
+    {
+      "activity_id": "act_1001",
+      "occurred_at": "2026-05-14T09:00:00Z",
+      "category": "backup",
+      "action": "failed",
+      "subject_type": "site",
+      "subject_id": "site_124",
+      "subject_label": "Lee Residence",
+      "detail": "Scheduled backup failed",
+      "severity": "critical",
+      "actor_label": "HomeSignal"
+    },
+    {
+      "activity_id": "act_1002",
+      "occurred_at": "2026-05-14T08:10:00Z",
+      "category": "device",
+      "action": "reported_disconnected",
+      "subject_type": "device",
+      "subject_id": "dev_124",
+      "subject_label": "Lee Residence",
+      "detail": "HomeSignal has not heard from this Home Assistant instance recently",
+      "severity": "critical",
+      "actor_label": "HomeSignal"
+    },
+    {
+      "activity_id": "act_1003",
+      "occurred_at": "2026-05-13T17:35:00Z",
+      "category": "enrollment",
+      "action": "claim_finalized",
+      "subject_type": "site",
+      "subject_id": "site_123",
+      "subject_label": "Smith Residence",
+      "detail": "Pairing completed and the HomeSignal app began reporting",
+      "severity": "info",
+      "actor_label": "Maya Patel"
+    }
+  ]
+}

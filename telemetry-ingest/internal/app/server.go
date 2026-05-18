@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/homesignal-io/homesignal-home-assistant/telemetry-ingest/internal/pipeline"
+	"github.com/homesignal-io/homesignal-home-assistant-app/telemetry-ingest/internal/pipeline"
 )
 
 type Server struct {

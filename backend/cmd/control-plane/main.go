@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/controlplane"
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/lambdaproxy"
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/config"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/controlplane"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/lambdaproxy"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
 
 var version = "dev"

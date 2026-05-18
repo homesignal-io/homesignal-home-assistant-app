@@ -1,14 +1,14 @@
-# HA Plugin User Journey Report
+# HA App User Journey Report
 
 Date: 2026-05-14
 
-Scope: browser walkthrough of the HomeSignal Home Assistant add-on mock only, including the add-on status page, status states, pairing flow, claim invite verification conditions, paired success view, permissions page, and advanced page.
+Scope: browser walkthrough of the HomeSignal Home Assistant app mock only, including the app status page, status states, pairing flow, claim invite verification conditions, paired success view, permissions page, and advanced page.
 
-Audience lens: technical Home Assistant users and integrators. These users are comfortable with Home Assistant, add-ons, switches, status panels, versions, and operational troubleshooting. The UI should be precise and practical, not overly simplified.
+Audience lens: technical Home Assistant users and integrators. These users are comfortable with Home Assistant, apps, switches, status panels, versions, and operational troubleshooting. The UI should be precise and practical, not overly simplified.
 
 ## Summary
 
-The HA plugin experience is moving in the right direction. The strongest decision is reducing the product surface to four local add-on surfaces:
+The HA app experience is moving in the right direction. The strongest decision is reducing the product surface to four local app surfaces:
 
 - `Status`
 - `Pairing`
@@ -17,11 +17,11 @@ The HA plugin experience is moving in the right direction. The strongest decisio
 
 The state-specific mock controls are useful for development, but the product itself should feel like one status page with different states, one pairing flow with different conditions inside each step, one local management policy page, and one advanced maintenance page.
 
-The add-on now has a good tone: light Home Assistant styling, clear pairing state, clear “managed by” identity, explicit update warnings, and visible but not theatrical trust details.
+The app now has a good tone: light Home Assistant styling, clear pairing state, clear “managed by” identity, explicit update warnings, and visible but not theatrical trust details.
 
 ## What Works
 
-- The page model is right: `Status`, `Pairing`, `Permissions`, and `Advanced` are the real local add-on concepts.
+- The page model is right: `Status`, `Pairing`, `Permissions`, and `Advanced` are the real local app concepts.
 - The status page states now share one frame:
   - fresh install / not paired
   - healthy / paired
@@ -43,11 +43,11 @@ The add-on now has a good tone: light Home Assistant styling, clear pairing stat
   - rate limited
 - The paired success screen feels close: clear success, clear managing organization/site, claimed-by details, return link, portal link, and unpair action.
 - `Open HomeSignal portal` as an underlined outbound link feels right. It should not be a local action button.
-- `Go to add-on settings` as the settings button label is clearer than `Open add-on settings`.
+- `Go to app settings` as the settings button label is clearer than `Open app settings`.
 
 ## What Is Not Working Yet
 
-- The visible mock controls make the add-on feel artificial during review. They are useful for development, but should be hidden or clearly isolated for product screenshots and implementation handoff.
+- The visible mock controls make the app feel artificial during review. They are useful for development, but should be hidden or clearly isolated for product screenshots and implementation handoff.
 - `Organization` is acceptable for now, but may need a more general label later if the managed entity can be an individual account.
 - `Retry pairing` in the disconnected state is understandable but may become `Repair pairing`, `Reconnect`, or `Try again` once the actual recovery behavior is known.
 - The remote management permission block is dense by nature. Technical users can handle it, but the default “full remote management” option needs careful wording because it is the highest-trust moment.
@@ -87,7 +87,7 @@ Recommendation:
 Works:
 
 - `Disconnected from HomeSignal cloud` is clear and should remain a top status.
-- Keeping `Managed by` visible is important because the add-on is still associated even while disconnected.
+- Keeping `Managed by` visible is important because the app is still associated even while disconnected.
 - The latest/last connected timestamp is useful.
 
 Needs work:
@@ -107,9 +107,9 @@ Recommendation:
 
 Works:
 
-- The add-on remains `Paired with HomeSignal cloud`; the update condition is a warning, not a pairing state. This is correct.
+- The app remains `Paired with HomeSignal cloud`; the update condition is a warning, not a pairing state. This is correct.
 - The severe auto-update alert is well placed above managed identity and health.
-- `Go to add-on settings` is the right CTA.
+- `Go to app settings` is the right CTA.
 
 Needs work:
 
@@ -140,7 +140,7 @@ Recommendation:
 
 - Keep switches and permission chips.
 - Avoid overly friendly security language.
-- Make clear that permissions are enforced locally by the add-on.
+- Make clear that permissions are enforced locally by the app.
 
 ### Claim Invite Step
 
@@ -175,7 +175,7 @@ Works:
 - The success check and centered heading give the right small amount of ceremony.
 - `Managed by` is clear.
 - `Claimed by`, email, and device ID provide the right security receipt.
-- `Return to add-on status page` is clear.
+- `Return to app status page` is clear.
 - `Open HomeSignal portal` as a link is correct.
 - `Unpair from HomeSignal` is visible but appropriately muted.
 
@@ -202,12 +202,12 @@ Recommendation:
 
 ## Product Direction
 
-The HA plugin should feel like commissioning equipment inside Home Assistant:
+The HA app should feel like commissioning equipment inside Home Assistant:
 
 - precise
 - calm
 - local-first
-- clear about who manages the add-on
+- clear about who manages the app
 - explicit about pairing and unpairing
 - practical about warnings
 

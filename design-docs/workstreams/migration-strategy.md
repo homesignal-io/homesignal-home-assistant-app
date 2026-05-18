@@ -1,6 +1,6 @@
 # Migration Strategy Workstream
 
-Migration strategy covers durable changes that must move safely across time. It is not only database migration. In HomeSignal, migrations may involve Postgres schema, local add-on state, device credentials, MQTT topics, message schemas, deployment config, and ownership boundaries.
+Migration strategy covers durable changes that must move safely across time. It is not only database migration. In HomeSignal, migrations may involve Postgres schema, local app state, device credentials, MQTT topics, message schemas, deployment config, and ownership boundaries.
 
 ## Agent Use
 
@@ -138,13 +138,13 @@ Every affected service plan should state:
 
 ## V0 Decisions (Closed)
 
-- Add-on local state migrations should be versioned, idempotent functions that
+- App local state migrations should be versioned, idempotent functions that
   read the current local schema version, validate required fields, transform to
   the next schema, and write atomically.
 - Local migration must back up or preserve enough prior state to recover from a
   failed write, but it must not copy private keys or secrets into broad logs,
   fixtures, or world-readable files.
-- The add-on should refuse unsafe local state by entering a degraded/unclaimed
+- The app should refuse unsafe local state by entering a degraded/unclaimed
   safe mode rather than silently inventing claimed identity from partial files.
 - Local state migration tests should include old-version fixtures, corrupted
   files, missing optional fields, missing secret material, and already-migrated
@@ -152,20 +152,20 @@ Every affected service plan should state:
 
 ## Device Compatibility Default
 
-HomeSignal supports backward-compatible add-on/cloud changes where practical, but
-does not promise indefinite support for old add-on protocols. Automatic updates
-through the local Home Assistant add-on/Supervisor path are the supported
+HomeSignal supports backward-compatible app/cloud changes where practical, but
+does not promise indefinite support for old app protocols. Automatic updates
+through the local Home Assistant app/Supervisor path are the supported
 operating mode. A local administrator may disable automatic updates, but the UI
-should make unsupported/drifting add-on versions visible and explain that
+should make unsupported/drifting app versions visible and explain that
 compatibility may eventually be revoked.
 
 V0 compatibility window:
 
-- Support the current add-on protocol family plus one prior compatible protocol
+- Support the current app protocol family plus one prior compatible protocol
   family.
 - Normal deprecation should provide at least 30 days notice when practical.
 - Security or severe abuse issues may require immediate cutoff.
-- Unsupported add-on versions should be visible in the UI.
+- Unsupported app versions should be visible in the UI.
 - Disabling automatic updates is allowed locally, but drift beyond the supported
   protocol window is unsupported.
 

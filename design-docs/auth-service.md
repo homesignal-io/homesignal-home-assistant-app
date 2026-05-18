@@ -33,7 +33,7 @@ Core Principles
 * No explicit deny rules in v0.
 * No user impersonation.
 * No hidden vendor god-mode in the cloud.
-* Remote/host control requires cloud permission, site policy, local add-on policy, and add-on/device approval.
+* Remote/host control requires cloud permission, site policy, local app policy, and app/device approval.
 * API keys later authenticate service accounts, not themselves.
 * Buildings and zones are first-class resources and always seeded.
 * Orphaned states are remediation/error states, not normal product states.
@@ -416,8 +416,8 @@ Allow only if:
 user has command permission
 AND account relationship/membership permits the site
 AND site policy allows the command category
-AND local add-on policy allows the command category
-AND add-on/device policy allows the command
+AND local app policy allows the command category
+AND app/device policy allows the command
 AND command is enabled/supported
 AND target is active
 
@@ -429,7 +429,7 @@ can(subject, "device:command", deviceResource, {
   command_type: "restart_agent"
 })
 
-AuthorizationService or a trusted policy resolver loads authoritative site, add-on, and device policy from Postgres and device state. The local add-on remains the final execution authority for Home Assistant actions.
+AuthorizationService or a trusted policy resolver loads authoritative site, app, and device policy from Postgres and device state. The local app remains the final execution authority for Home Assistant actions.
 
 Seeded Role Recommendations
 
@@ -708,7 +708,7 @@ support_sessions
 - expires_at
 - created_at
 
-For MVP, do not build hidden vendor god-mode. Managed local authority is explicit site/add-on configuration, not a cloud-only override.
+For MVP, do not build hidden vendor god-mode. Managed local authority is explicit site/app configuration, not a cloud-only override.
 
 Lifecycle Terms
 

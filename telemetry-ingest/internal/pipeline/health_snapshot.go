@@ -35,7 +35,7 @@ func (DeviceHealthSnapshotHandler) Validate(envelope RuntimeEnvelope) (Projectio
 		},
 		Sidecar: map[string]string{
 			"runtime_log_summary.count": fmt.Sprintf("%d", len(payload.RuntimeLogSummary)),
-			"addons.count":              fmt.Sprintf("%d", len(payload.Addons)),
+			"ha_apps.count":             fmt.Sprintf("%d", len(payload.HAApps)),
 		},
 	}, nil
 }
@@ -43,7 +43,7 @@ func (DeviceHealthSnapshotHandler) Validate(envelope RuntimeEnvelope) (Projectio
 type DeviceHealthSnapshotPayload struct {
 	Agent             AgentSnapshot            `json:"agent"`
 	HomeAssistant     HomeAssistantSnapshot    `json:"home_assistant"`
-	Addons            []AddonSnapshot          `json:"addons,omitempty"`
+	HAApps            []HAAppSnapshot          `json:"ha_apps,omitempty"`
 	RuntimeLogSummary []RuntimeLogSummaryEntry `json:"runtime_log_summary,omitempty"`
 }
 
@@ -118,8 +118,8 @@ type HAStorageStatus struct {
 	LastCheckedAt *time.Time `json:"last_checked_at,omitempty"`
 }
 
-type AddonSnapshot struct {
-	AddonID     *string       `json:"addon_id,omitempty"`
+type HAAppSnapshot struct {
+	HAAppID     *string       `json:"ha_app_id,omitempty"`
 	Slug        string        `json:"slug"`
 	DisplayName string        `json:"display_name,omitempty"`
 	Repository  string        `json:"repository,omitempty"`
@@ -128,16 +128,16 @@ type AddonSnapshot struct {
 	Enabled     bool          `json:"enabled"`
 	LastSeenAt  *time.Time    `json:"last_seen_at,omitempty"`
 	Update      UpdateStatus  `json:"update,omitempty"`
-	Health      AddonHealth   `json:"health,omitempty"`
-	Activity    AddonActivity `json:"activity,omitempty"`
+	Health      HAAppHealth   `json:"health,omitempty"`
+	Activity    HAAppActivity `json:"activity,omitempty"`
 }
 
-type AddonHealth struct {
+type HAAppHealth struct {
 	State   string   `json:"state,omitempty"`
 	Reasons []string `json:"reasons,omitempty"`
 }
 
-type AddonActivity struct {
+type HAAppActivity struct {
 	EventsProcessedLastHour *int       `json:"events_processed_last_hour,omitempty"`
 	LastEventAt             *time.Time `json:"last_event_at,omitempty"`
 }
@@ -184,12 +184,12 @@ func (p DeviceHealthSnapshotPayload) Validate(appliedPolicyVersion string) error
 		return fmt.Errorf("payload.home_assistant.storage.status is required")
 	}
 
-	for index, addon := range p.Addons {
-		if strings.TrimSpace(addon.Slug) == "" && (addon.AddonID == nil || strings.TrimSpace(*addon.AddonID) == "") {
-			return fmt.Errorf("payload.addons[%d] requires slug or addon_id", index)
+	for index, app := range p.HAApps {
+		if strings.TrimSpace(app.Slug) == "" && (app.HAAppID == nil || strings.TrimSpace(*app.HAAppID) == "") {
+			return fmt.Errorf("payload.ha_apps[%d] requires slug or ha_app_id", index)
 		}
-		if strings.TrimSpace(addon.Status) == "" {
-			return fmt.Errorf("payload.addons[%d].status is required", index)
+		if strings.TrimSpace(app.Status) == "" {
+			return fmt.Errorf("payload.ha_apps[%d].status is required", index)
 		}
 	}
 

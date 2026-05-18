@@ -3,10 +3,11 @@ package controlplane
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/api"
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/platform/config"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/api"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/platform/config"
 )
 
 type App struct {
@@ -57,15 +58,33 @@ func (a *App) Handler() http.Handler {
 	})
 }
 
-func (a *App) Serve(method string, path string, _ map[string]string, _ []byte) Response {
-	return a.ServeWithContext(api.NewSyntheticRequestContext(), method, path, nil, nil)
+func (a *App) Serve(method string, path string, headers map[string]string, body []byte) Response {
+	return a.ServeWithContext(api.NewSyntheticRequestContext(), method, path, headers, body)
 }
 
-func (a *App) ServeWithContext(requestContext api.RequestContext, method string, path string, _ map[string]string, _ []byte) Response {
-	if method != http.MethodGet {
+func (a *App) ServeWithContext(requestContext api.RequestContext, method string, path string, headers map[string]string, _ []byte) Response {
+	if route, ok := operationalRoutes(method, path); ok {
+		requestContext.RouteTemplate = route
+		return a.handleOperationalRoute(requestContext, path)
+	}
+	if operationalPathExists(path) {
 		return errorResponse(requestContext, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
 	}
 
+	if strings.HasPrefix(path, "/api/v1") {
+		return a.handlePublicAPIRoute(requestContext, method, path, headers)
+	}
+	if strings.HasPrefix(path, "/agent") {
+		return a.handleAgentRoute(requestContext, method, path, headers)
+	}
+	if strings.HasPrefix(path, "/internal") {
+		return a.handleInternalRoute(requestContext, method, path, headers)
+	}
+
+	return errorResponse(requestContext, http.StatusNotFound, "NOT_FOUND", "Not found.")
+}
+
+func (a *App) handleOperationalRoute(_ api.RequestContext, path string) Response {
 	switch path {
 	case "/healthz":
 		return jsonResponse(http.StatusOK, map[string]any{
@@ -91,7 +110,82 @@ func (a *App) ServeWithContext(requestContext api.RequestContext, method string,
 			"version":     a.cfg.Version,
 		})
 	default:
+		return jsonResponse(http.StatusInternalServerError, map[string]any{
+			"error": "unregistered operational route",
+		})
+	}
+}
+
+func (a *App) handlePublicAPIRoute(requestContext api.RequestContext, method string, path string, headers map[string]string) Response {
+	route, ok, pathMatched := findPublicRoute(method, path)
+	if !ok {
+		if pathMatched {
+			return errorResponse(requestContext, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
+		}
 		return errorResponse(requestContext, http.StatusNotFound, "NOT_FOUND", "Not found.")
+	}
+	requestContext.RouteTemplate = route.Pattern
+
+	if route.Auth == publicAuthHuman && strings.TrimSpace(headerValue(headers, "Authorization")) == "" {
+		return errorResponse(requestContext, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication required.")
+	}
+
+	response := errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
+	response.Headers["X-HomeSignal-Operation-ID"] = route.OperationID
+	if route.Auth == publicAuthEnrollment {
+		response.Headers["Cache-Control"] = "no-store"
+	}
+	return response
+}
+
+func (a *App) handleAgentRoute(requestContext api.RequestContext, method string, path string, headers map[string]string) Response {
+	route, ok, pathMatched := findRoute(method, path, agentRouteSpecs)
+	if !ok {
+		if pathMatched {
+			return errorResponse(requestContext, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
+		}
+		return errorResponse(requestContext, http.StatusNotFound, "NOT_FOUND", "Not found.")
+	}
+	requestContext.RouteTemplate = route.Pattern
+
+	if strings.TrimSpace(headerValue(headers, "X-HomeSignal-Device-Cert-Fingerprint")) == "" {
+		return errorResponse(requestContext, http.StatusUnauthorized, "DEVICE_CERTIFICATE_REQUIRED", "Device certificate authentication is required.")
+	}
+	return errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
+}
+
+func (a *App) handleInternalRoute(requestContext api.RequestContext, method string, path string, headers map[string]string) Response {
+	route, ok, pathMatched := findRoute(method, path, internalRouteSpecs)
+	if !ok {
+		if pathMatched {
+			return errorResponse(requestContext, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
+		}
+		return errorResponse(requestContext, http.StatusNotFound, "NOT_FOUND", "Not found.")
+	}
+	requestContext.RouteTemplate = route.Pattern
+
+	if strings.TrimSpace(headerValue(headers, "X-HomeSignal-Service-Principal")) == "" {
+		return errorResponse(requestContext, http.StatusUnauthorized, "SERVICE_AUTHENTICATION_REQUIRED", "Service authentication is required.")
+	}
+	return errorResponse(requestContext, http.StatusNotImplemented, "ROUTE_NOT_IMPLEMENTED", "Route is registered but not implemented yet.")
+}
+
+func operationalRoutes(method string, path string) (string, bool) {
+	if method != http.MethodGet {
+		return "", false
+	}
+	if operationalPathExists(path) {
+		return path, true
+	}
+	return "", false
+}
+
+func operationalPathExists(path string) bool {
+	switch path {
+	case "/healthz", "/readyz", "/version":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -102,6 +196,15 @@ func jsonResponse(status int, body map[string]any) Response {
 		Headers:    headers,
 		Body:       payload,
 	}
+}
+
+func headerValue(headers map[string]string, name string) string {
+	for key, value := range headers {
+		if strings.EqualFold(key, name) {
+			return value
+		}
+	}
+	return ""
 }
 
 func errorResponse(requestContext api.RequestContext, status int, code string, message string) Response {

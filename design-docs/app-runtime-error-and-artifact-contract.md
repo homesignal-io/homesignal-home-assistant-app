@@ -1,6 +1,6 @@
-# Add-On Runtime Error And Artifact Contract
+# App Runtime Error And Artifact Contract
 
-This spec defines how the claimed HomeSignal add-on reports runtime errors, advertises locally available diagnostics, and fulfills cloud-authorized artifact upload requests. It complements the add-on skeleton, enrollment contract, topic design, state-change policy propagation, and artifact upload broker specs.
+This spec defines how the claimed HomeSignal app reports runtime errors, advertises locally available diagnostics, and fulfills cloud-authorized artifact upload requests. It complements the app skeleton, enrollment contract, topic design, state-change policy propagation, and artifact upload broker specs.
 
 The goal is a useful failure path without creating an error storm, arbitrary local file upload, IoT-delivered signed URLs, or MQTT blob channel.
 
@@ -41,13 +41,13 @@ Out of scope:
 - IoT Core carries only tiny artifact command notices; command details, upload negotiation, signed URL issuance, completion, and result reporting use the mTLS Agent HTTPS API defined in `artifact-upload-broker.md`.
 - Object storage holds bytes; Postgres artifact records hold authority and queryable metadata.
 - Upload failures must not recursively generate more log-upload requests.
-- Local add-on behavior must fail closed for unsafe commands and fail quiet for recursive diagnostics loops.
+- Local app behavior must fail closed for unsafe commands and fail quiet for recursive diagnostics loops.
 
 ## Routine Device Logs
 
 Routine device logs are structured events, not raw log streams.
 
-The add-on may emit routine runtime log summaries only when allowed by the
+The app may emit routine runtime log summaries only when allowed by the
 active publish policy. The policy controls minimum level, max events per
 window, max bytes per window, diagnostic excerpt allowance, and health snapshot
 cadence.
@@ -61,6 +61,13 @@ Standing levels:
 `debug` is not a standing routine log level. Rich debug capture uses temporary
 debug capture commands.
 
+Local storage of diagnostic logs is separate from routine cloud publishing. The
+app may keep a bounded local diagnostic log ring for support, UI status, and
+future cloud-authorized bundles. The local log ring must have a fixed storage
+budget, overwrite or delete oldest entries first, and degrade quietly rather
+than grow without bound. The initial local architecture is defined in
+`ha-app-runtime-architecture.md`.
+
 Routine log summaries must be collapsed by component, reason code, and time
 window where practical. Runtime messages must include
 `applied_publish_policy_version` and must not include
@@ -72,7 +79,7 @@ Home Assistant config, or unbounded stack traces.
 Temporary debug capture is cloud-initiated by an authorized internal/support
 actor. It is not a customer-facing local toggle.
 
-The add-on may accept debug capture commands only when:
+The app may accept debug capture commands only when:
 
 - command type is allowlisted, such as `enable_debug_capture`,
   `disable_debug_capture`, `collect_debug_snapshot`, or `request_debug_bundle`
@@ -80,11 +87,11 @@ The add-on may accept debug capture commands only when:
 - the command has a bounded `debug_session_id`, `expires_at`, redaction profile,
   and max local bytes/events
 - requested capture categories are allowlisted
-- the local add-on can enforce expiry without another cloud call
+- the local app can enforce expiry without another cloud call
 
 Allowed v0 capture categories:
 
-- HomeSignal add-on runtime status
+- HomeSignal app runtime status
 - cloud connectivity checks
 - Agent HTTPS auth status summaries
 - AWS IoT connectivity status summaries
@@ -92,7 +99,7 @@ Allowed v0 capture categories:
 - publish-policy version/freshness facts
 - update readiness/status facts
 - backup status facts
-- redacted recent add-on log excerpts
+- redacted recent app log excerpts
 
 Disallowed v0 capture categories:
 
@@ -102,13 +109,13 @@ Disallowed v0 capture categories:
 - private keys, tokens, claim invite codes, cookies, signed URLs, or raw secrets
 - unrestricted Home Assistant service-call history
 
-Debug capture must automatically expire locally. If upload fails, the add-on
+Debug capture must automatically expire locally. If upload fails, the app
 must follow the artifact upload recursion guard and must not create an error
 storm while trying to report debug-mode errors.
 
 ## Error Event Shape
 
-When the add-on detects an important runtime error, it emits a bounded
+When the app detects an important runtime error, it emits a bounded
 `agent_alarm` event.
 
 Required fields:
@@ -141,7 +148,7 @@ Optional contextual fields:
 
 `diagnostic_excerpt` may contain a redacted text excerpt capped at 5 KB total for the full event. It must not include secrets, signed URLs, raw policy blobs, local file contents beyond the small excerpt, or large stack traces.
 
-If more useful local logs exist, set `more_logs_available=true` and include `local_artifact_ref`. The add-on must not upload those logs until the cloud sends an allowlisted artifact upload command.
+If more useful local logs exist, set `more_logs_available=true` and include `local_artifact_ref`. The app must not upload those logs until the cloud sends an allowlisted artifact upload command.
 
 ## Policy Application Failure
 
@@ -159,9 +166,9 @@ Security-relevant failures use `warning` or `critical`, including wrong device, 
 
 ## Artifact Upload Command Notice
 
-The add-on accepts artifact upload only after a cloud-authorized command notice. The IoT command notice is intentionally tiny and must not contain signed URLs, large command details, secrets, or upload payloads.
+The app accepts artifact upload only after a cloud-authorized command notice. The IoT command notice is intentionally tiny and must not contain signed URLs, large command details, secrets, or upload payloads.
 
-The add-on should ACK `accepted` or `rejected` through the Agent HTTPS API within the command ACK window after validating that the command type is allowlisted and that it can fetch command details.
+The app should ACK `accepted` or `rejected` through the Agent HTTPS API within the command ACK window after validating that the command type is allowlisted and that it can fetch command details.
 
 ```text
 POST /agent/commands/{command_id}/ack
@@ -182,7 +189,7 @@ Command notice payload:
 }
 ```
 
-After receiving the notice, the add-on retrieves command details over HTTPS:
+After receiving the notice, the app retrieves command details over HTTPS:
 
 ```text
 GET /agent/commands/{command_id}
@@ -194,13 +201,14 @@ Then it requests an upload session:
 POST /agent/commands/{command_id}/artifact-upload
 ```
 
-The Agent HTTPS API authenticates the add-on with mTLS, derives device identity from the client certificate, verifies the command belongs to that device, and returns a short-lived signed upload URL.
+The Agent HTTPS API authenticates the app with mTLS, derives device identity from the client certificate, verifies the command belongs to that device, and returns a short-lived signed upload URL.
 
-The add-on must validate before upload:
+The app must validate before upload:
 
 - command type is allowlisted
 - `purpose` is allowlisted
 - `local_artifact_ref` exists and maps to generated content, not an arbitrary path
+- time-window or component selectors are bounded when no `local_artifact_ref` is supplied
 - command details came from the mTLS Agent HTTPS API
 - signed URL is HTTPS
 - destination host matches approved object-storage patterns
@@ -212,7 +220,7 @@ If validation fails, reject the command and emit only a bounded error event unde
 
 ## Upload Completion Result
 
-After attempting upload, the add-on reports upload completion and terminal command lifecycle result through the mTLS Agent HTTPS API.
+After attempting upload, the app reports upload completion and terminal command lifecycle result through the mTLS Agent HTTPS API.
 
 Upload completion endpoint:
 
@@ -269,7 +277,7 @@ Rules:
 - A failure while uploading `error_log_bundle` must never trigger another `error_log_bundle` request.
 - Artifact upload code must not use the artifact-upload path to report errors caused by artifact upload.
 - Local suppression counters are tracked and included in the next health telemetry snapshot.
-- If cloud repeatedly requests an upload that the add-on rejects as invalid, the add-on emits a bounded alarm and then suppresses repeats for the collapse window.
+- If cloud repeatedly requests an upload that the app rejects as invalid, the app emits a bounded alarm and then suppresses repeats for the collapse window.
 
 Initial upload-related alarm type:
 
@@ -283,10 +291,10 @@ Some artifacts are discovered locally before the cloud knows they are useful.
 
 Allowed device-initiated availability signals:
 
-- `error_log_bundle` after a significant add-on error
+- `error_log_bundle` after a significant app error
 - `topology_snapshot` after topology changes, when topology upload is enabled by policy
 
-The add-on sends only a small event:
+The app sends only a small event:
 
 ```json
 {
@@ -303,7 +311,7 @@ Cloud may ignore it, rate-limit it, or create a command row and send a tiny arti
 
 ## Local Persistence
 
-The add-on should keep a small local diagnostic registry:
+The app should keep a small local diagnostic registry:
 
 - `local_error_id`
 - `local_artifact_ref`
@@ -315,6 +323,53 @@ The add-on should keep a small local diagnostic registry:
 - expiry for local diagnostic material
 
 This registry is local metadata only. It must not store cloud authority, signed URLs after expiry, or customer-visible state.
+
+## Local Diagnostic Log Store
+
+The local diagnostic log store is the source for `error_log_bundle` generation.
+It must not be an unbounded append-only file.
+
+Default local behavior:
+
+- store under `/config/logs`
+- use segmented structured logs or an equivalent bounded ring
+- cap total diagnostic log bytes to a configured budget
+- default budget is `32 MiB`
+- overwrite/delete oldest segment first
+- keep `registry.json` or equivalent metadata for local artifact references,
+  suppression counters, oldest/newest retained timestamps, and GC state
+- report storage pressure as degraded logging status, not as a fatal agent
+  startup error
+
+The app may emit stdout logs independently for Home Assistant visibility.
+Stdout logging is not the cloud log retrieval source of truth.
+
+The local UI may expose a bounded read-only tail from this store. That UI route
+must not accept local file paths, must apply normal redaction, and must not
+trigger uploads. It is only for local inspection.
+
+## Cloud Log Request Selectors
+
+Cloud-requested app runtime logs are fulfilled only through `upload_artifact` command
+details fetched over Agent HTTPS. The cloud may request a generated log bundle
+by:
+
+- `local_artifact_ref`
+- bounded time window
+- minimum level
+- component allowlist
+- reason-code allowlist
+- max bytes
+- redaction profile
+
+The cloud must not request:
+
+- arbitrary local file paths
+- shell command output
+- broad Home Assistant config dumps
+- unbounded "all logs"
+- raw secrets, tokens, private keys, claim/pairing codes, signed URLs, cookies,
+  or unrestricted stack traces
 
 ## Acceptance Criteria
 

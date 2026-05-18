@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/homesignal-io/homesignal-home-assistant/backend/internal/controlplane"
+	"github.com/homesignal-io/homesignal-home-assistant-app/backend/internal/controlplane"
 )
 
 type Handler interface {
@@ -27,7 +27,7 @@ type apiGatewayV2Event struct {
 	IsBase64Encoded bool              `json:"isBase64Encoded"`
 	RequestContext  struct {
 		RequestID string `json:"requestId"`
-		HTTP struct {
+		HTTP      struct {
 			Method string `json:"method"`
 			Path   string `json:"path"`
 		} `json:"http"`
@@ -168,17 +168,17 @@ func handleInvocation(handler Handler, payload []byte) (apiGatewayV2Response, re
 	}
 
 	return apiGatewayV2Response{
-		StatusCode:      appResponse.StatusCode,
-		Headers:         headers,
-		Body:            string(appResponse.Body),
-		IsBase64Encoded: false,
-	}, requestSummary{
-		Method:     method,
-		Path:       path,
-		RequestID:  event.RequestContext.RequestID,
-		StatusCode: appResponse.StatusCode,
-		Duration:   time.Since(start),
-	}, nil
+			StatusCode:      appResponse.StatusCode,
+			Headers:         headers,
+			Body:            string(appResponse.Body),
+			IsBase64Encoded: false,
+		}, requestSummary{
+			Method:     method,
+			Path:       path,
+			RequestID:  event.RequestContext.RequestID,
+			StatusCode: appResponse.StatusCode,
+			Duration:   time.Since(start),
+		}, nil
 }
 
 func postInvocationResponse(

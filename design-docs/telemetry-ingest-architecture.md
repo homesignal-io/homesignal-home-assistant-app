@@ -27,7 +27,7 @@ In scope:
 
 - Claimed-device telemetry and event ingestion.
 - AWS IoT lifecycle event ingestion for connectivity presence.
-- Device health snapshots from Home Assistant, Supervisor, add-on runtime, storage, backup, update, policy, and connectivity signals, as available.
+- Device health snapshots from Home Assistant, Supervisor, app runtime, storage, backup, update, policy, and connectivity signals, as available.
 - Schema-aware validation, normalization, material hashing, and projection.
 - Latest-state and presence storage for API reads.
 - Sparse material event history for support/debugging.
@@ -45,12 +45,12 @@ Out of scope:
 - Backups, diagnostics bundles, topology discovery, and release orchestration.
 - Runtime-editable schemas or transformation rules.
 
-Health means device/add-on/site operational health, not a separate product authority. V0 should capture whatever safe, bounded signals are available to determine whether the Home Assistant site and HomeSignal add-on appear healthy, stale, degraded, updating, backup-failing, storage-constrained, policy-drifting, or disconnected.
+Health means device/app/site operational health, not a separate product authority. V0 should capture whatever safe, bounded signals are available to determine whether the Home Assistant site and HomeSignal app appear healthy, stale, degraded, updating, backup-failing, storage-constrained, policy-drifting, or disconnected.
 
 ## System Flow
 
 ```text
-Claimed add-on
+Claimed app
   -> Agent HTTPS API over mTLS
   -> telemetry/event receiver
   -> Telemetry Ingest
@@ -83,7 +83,7 @@ MVP deployment shape:
 
 ```mermaid
 flowchart LR
-  Addon["Claimed Add-on"] --> AgentAPI["Agent HTTPS API (mTLS)"]
+  App["Claimed App"] --> AgentAPI["Agent HTTPS API (mTLS)"]
   AgentAPI --> Receiver["Receiver: HTTPS adapter"]
   Receiver --> Ingest["Telemetry Ingest"]
   Ingest --> Dedupe["DedupeStore interface"]
@@ -321,9 +321,9 @@ Example payload:
       "last_checked_at": "2026-05-14T11:59:30Z"
     }
   },
-  "addons": [
+  "ha_apps": [
     {
-      "addon_id": null,
+      "ha_app_id": null,
       "slug": "alarm_bridge",
       "display_name": "Alarm Bridge",
       "repository": "local",
@@ -374,7 +374,7 @@ Envelope field meanings:
 | `schema_type` | Exact contract that selects validation, normalization, projection, and storage behavior. |
 | `schema_version` | Positive integer version for the exact `schema_type`. |
 | `message_id` | Device-generated opaque ID, preferably ULID or UUID, used for dedupe/correlation. |
-| `applied_publish_policy_version` | Opaque server-issued publish-policy version the add-on actually enforced for this message. |
+| `applied_publish_policy_version` | Opaque server-issued publish-policy version the app actually enforced for this message. |
 | `observed_at` | Device-observed timestamp for the facts, separate from cloud `received_at`. |
 | `payload` | Typed JSON object. Ownership namespaces inside payload identify who observed or owns each fact. |
 
@@ -382,8 +382,8 @@ Initial message types:
 
 | Message type | Source | MVP behavior |
 | --- | --- | --- |
-| `telemetry` | add-on | Store material current-state changes or sparse refreshes |
-| `event` | add-on | Store occurrence facts for HA events, agent alarms, and `command_lifecycle` |
+| `telemetry` | app | Store material current-state changes or sparse refreshes |
+| `event` | app | Store occurrence facts for HA events, agent alarms, and `command_lifecycle` |
 | `$aws/events/presence/connected/{clientId}` | AWS IoT lifecycle | Update presence online after ordering checks |
 | `$aws/events/presence/disconnected/{clientId}` | AWS IoT lifecycle | Schedule delayed offline verification |
 | `$aws/events/presence/connect_failed/{clientId}` | AWS IoT lifecycle | Record failure and emit bounded alert candidate |
@@ -401,16 +401,16 @@ Initial telemetry schema types:
 - `device.health_snapshot`
 
 `device.health_snapshot` is the hourly v0 roll-up. It answers: "is the claimed
-add-on locally healthy enough to operate and report, and what local Home
-Assistant/add-on facts changed during the interval?"
+app locally healthy enough to operate and report, and what local Home
+Assistant/app facts changed during the interval?"
 
 Payload ownership namespaces:
 
 | Namespace | Meaning |
 | --- | --- |
-| `agent` | Local HomeSignal runtime/add-on facts, including status, version, cloud connectivity, applied publish policy, update posture, and local suppression counters. |
-| `home_assistant` | Local Home Assistant environment facts observed by the add-on, including Core, Supervisor, backup, and storage summaries. |
-| `addons` | Observed Home Assistant add-ons as an array of objects, not a slug-keyed map. Slug/display name are mutable metadata; a cloud-assigned `addon_id` may be null until inventory mapping exists. |
+| `agent` | Local HomeSignal runtime/app facts, including status, version, cloud connectivity, applied publish policy, update posture, and local suppression counters. |
+| `home_assistant` | Local Home Assistant environment facts observed by the app, including Core, Supervisor, backup, and storage summaries. |
+| `ha_apps` | Observed Home Assistant apps as an array of objects, not a slug-keyed map. Slug/display name are mutable metadata; a cloud-assigned `ha_app_id` may be null until inventory mapping exists. |
 | `runtime_log_summary` | Collapsed, redacted log-derived facts by source/component/reason/window. It is telemetry context, not a raw log stream. |
 
 `event` messages are occurrences. They answer: "what happened that HomeSignal should record, route, or consider for alerting?"
@@ -426,12 +426,12 @@ Event policy:
 
 - No broad `ha_event` stream in v0.
 - Device-originated event categories/types are allowlisted.
-- Event volume limits are enforced both locally by the add-on and again in cloud ingest.
-- Add-on publish budget is provisioned by cloud policy and enforced hard from the last accepted policy.
-- The add-on receives resolved effective publish policy, not plan or tier labels.
+- Event volume limits are enforced both locally by the app and again in cloud ingest.
+- App publish budget is provisioned by cloud policy and enforced hard from the last accepted policy.
+- The app receives resolved effective publish policy, not plan or tier labels.
 - Publish policy includes interval rules for telemetry snapshots and event budgets for live events.
-- The add-on reports `applied_publish_policy_version` with every claimed-device runtime publish as metadata only.
-- If local policy is missing, expired, or invalid, the add-on falls back to conservative publishing defaults.
+- The app reports `applied_publish_policy_version` with every claimed-device runtime publish as metadata only.
+- If local policy is missing, expired, or invalid, the app falls back to conservative publishing defaults.
 - Conservative defaults allow low-rate `telemetry` with `schema_type=device.health_snapshot`, backup summary only inside that low-rate snapshot when available, and `agent_alarm` under a strict security budget.
 - Conservative defaults disable live `ha_event` and paid/live event behavior.
 - Cloud ingest enforces current server policy immediately after entitlement or plan changes.
@@ -471,7 +471,7 @@ Runtime telemetry/event routes are only for already-claimed devices using durabl
 
 Optional/future AWS IoT topic/rule routing is documented separately in `aws-iot-routing-contract.md`.
 
-Cloud-to-device commands use normal MQTT broker topics because the add-on subscribes to them. V0 device-to-cloud telemetry/events use Agent HTTPS. A future runtime family may move to AWS IoT Basic Ingest only when MQTT/rules semantics or scale justify it.
+Cloud-to-device commands use normal MQTT broker topics because the app subscribes to them. V0 device-to-cloud telemetry/events use Agent HTTPS. A future runtime family may move to AWS IoT Basic Ingest only when MQTT/rules semantics or scale justify it.
 
 AWS IoT named shadows are the separate desired/reported edge-state surface and are documented in `edge-state-adapter.md`. Telemetry Ingest may consume shadow-derived projections later, but it must not become the owner of shadow documents.
 
@@ -569,7 +569,7 @@ Do not ack input before required DB writes commit.
 Telemetry Ingest is the service that flags runtime messages for elevated
 attention. The sender is not authoritative for this flag.
 
-The add-on may include ordinary facts such as routine log level, component,
+The app may include ordinary facts such as routine log level, component,
 reason code, `applied_publish_policy_version`, and payload fields. It must not
 be trusted to decide cloud capture, retention, or support/debug routing.
 
@@ -708,11 +708,11 @@ Payload device annotations can be included in `message_hash` for replay/debug id
 `material_hash` includes product state:
 
 - reported health/degraded state
-- agent, Home Assistant Core, Supervisor, and add-on versions
+- agent, Home Assistant Core, Supervisor, and app versions
 - backup summary
 - update summary
 - storage thresholds
-- add-on and integration health summaries
+- app and integration health summaries
 
 Phase 1 DedupeStore:
 
@@ -996,7 +996,7 @@ s3://.../telemetry-history/env={env}/device_id={device_id}/year=YYYY/month=MM/da
 
 These summaries should be generated from normalized records and should contain
 boring, deterministic facts: health changes, backup summaries, agent alarms,
-command outcomes, policy changes, add-on inventory changes, debug-session
+command outcomes, policy changes, app inventory changes, debug-session
 references, artifact references, and bounded reason-code summaries. They are
 not product authority and should be rebuildable from the underlying archive and
 database facts.
@@ -1008,7 +1008,7 @@ Why a semi-fast DB view may still matter:
 - support can answer "what changed recently?" during an incident
 - alerting/platform-health can correlate recent material changes without scanning
   object storage
-- sparse history helps validate schema and add-on changes during early platform
+- sparse history helps validate schema and app changes during early platform
   evolution
 
 V0 should avoid promising broad historical analytics. If product requirements
@@ -1101,7 +1101,7 @@ Failure handling:
 
 | Failure | Behavior |
 | --- | --- |
-| HTTPS telemetry/event request fails on device | add-on treats telemetry as unsent and retries locally with bounds |
+| HTTPS telemetry/event request fails on device | app treats telemetry as unsent and retries locally with bounds |
 | Receiver unavailable | operational alarm; ingestion delayed or rejected depending transport |
 | Ingest worker down | request fails or times out; device retries within local budget |
 | Postgres unavailable | do not ack input; retry with backoff |

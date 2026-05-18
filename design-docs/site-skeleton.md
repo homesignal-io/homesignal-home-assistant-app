@@ -35,7 +35,7 @@ const nav = [
   "Alerts",
   "Audit",
   "Admin",
-  "HA Add-on",
+  "HA App",
   "Schema Coverage",
 ];
 
@@ -156,7 +156,7 @@ const devices = [
     os_type: "Home Assistant OS",
     home_assistant_version: "2026.5.0",
     supervisor_version: "2026.05.0",
-    addon_version: "0.1.4",
+    ha_app_version: "0.1.4",
     storage_status: "healthy",
     cloud_connection: "connected",
     credential_status: "active",
@@ -176,7 +176,7 @@ const devices = [
     os_type: "Home Assistant OS",
     home_assistant_version: "2026.5.0",
     supervisor_version: "2026.05.0",
-    addon_version: "0.1.3",
+    ha_app_version: "0.1.3",
     storage_status: "warning",
     cloud_connection: "connected",
     credential_status: "active",
@@ -262,7 +262,7 @@ const releases = [
     version: "0.1.4",
     rollout_id: "rollout_456",
     status: "promoted",
-    published_via: "GitHub / HA add-on repository",
+    published_via: "GitHub / HA app repository",
   },
   {
     id: "rel_015",
@@ -270,7 +270,7 @@ const releases = [
     version: "0.1.5",
     rollout_id: "rollout_500",
     status: "published_not_promoted",
-    published_via: "GitHub / HA add-on repository",
+    published_via: "GitHub / HA app repository",
   },
 ];
 
@@ -282,7 +282,7 @@ const auditEvents = [
   "Credential rotation completed for dev_123",
 ];
 
-const haAddonState = {
+const haAppState = {
   local_state: "CLAIMED",
   claim_invite_code: null,
   device_id: "dev_123",
@@ -292,8 +292,8 @@ const haAddonState = {
   private_key_path: "/config/iot/private.key",
   cloud_connection: "connected",
   last_policy_version: "ppv_123",
-  addon_version: "0.1.4",
-  desired_addon_version: "0.1.4",
+  ha_app_version: "0.1.4",
+  desired_ha_app_version: "0.1.4",
   last_error_excerpt: "No recent errors.",
 };
 
@@ -369,7 +369,7 @@ export default function HomeSignalProductSkeleton() {
           {page === "Alerts" && <Alerts />}
           {page === "Audit" && <Audit />}
           {page === "Admin" && <Admin />}
-          {page === "HA Add-on" && <HaAddon />}
+          {page === "HA App" && <HaApp />}
           {page === "Schema Coverage" && <SchemaCoverage />}
         </main>
       </div>
@@ -532,7 +532,7 @@ function Enrollment({ selectedSite }) {
         <Section title="Portal claim flow">
           <Step status="backed" label="Create site claim invite" source="device_claim_invites" />
           <Step status="backed" label="Email or share GUID claim code" source="device_claim_invite_email_deliveries" />
-          <Step status="backed" label="Add-on verifies invite and displays details" source="device_claim_verifications" />
+          <Step status="backed" label="App verifies invite and displays details" source="device_claim_verifications" />
           <Step status="backed" label="Local user confirms details" source="claim_verification confirm" />
           <Step status="backed" label="Finalize claim and persist credential metadata" source="devices + device_credentials" />
         </Section>
@@ -567,7 +567,7 @@ function DeviceDetail({ device, site }) {
         <Section title="Latest state">
           <Field label="Home Assistant version" value={device.home_assistant_version} status="backed" source="device_latest_state" />
           <Field label="Supervisor version" value={device.supervisor_version} status="backed" source="device_latest_state" />
-          <Field label="Add-on version" value={device.addon_version} status="backed" source="device_latest_state" />
+          <Field label="App version" value={device.ha_app_version} status="backed" source="device_latest_state" />
           <Field label="Storage" value={device.storage_status} status="backed" source="device_latest_state" />
           <Field label="Topology browser" value="Not exposed v0" status="future" source="topology_snapshots" />
           <Field label="Raw HA config viewer" value="Not allowed" status="missing" source="diagnostics boundary" />
@@ -578,8 +578,8 @@ function DeviceDetail({ device, site }) {
         <Section title="Edge desired/reported state">
           <Field label="Desired publish policy" value={edgeState.desired.publish_policy.version} status="backed" source="homesignal_edge.publish_policy" />
           <Field label="Reported publish policy" value={edgeState.reported.publish_policy.active_version} status="backed" source="homesignal_edge.publish_policy" />
-          <Field label="Desired add-on version" value={edgeState.desired.update.desired_version} status="backed" source="homesignal_edge.update" />
-          <Field label="Reported add-on version" value={edgeState.reported.update.current_version} status="backed" source="homesignal_edge.update" />
+          <Field label="Desired app version" value={edgeState.desired.update.desired_version} status="backed" source="homesignal_edge.update" />
+          <Field label="Reported app version" value={edgeState.reported.update.current_version} status="backed" source="homesignal_edge.update" />
           <Field label="Shadow full document history" value="Not stored by default" status="missing" source="edge-state-adapter.md" />
         </Section>
 
@@ -587,7 +587,7 @@ function DeviceDetail({ device, site }) {
           <Action label="Refresh publish policy" status="backed" source="commands.refresh_publish_policy" />
           <Action label="Trigger backup" status="backed" source="commands.trigger_backup + backups" />
           <Action label="Request bounded diagnostics" status="conditional" source="Diagnostics flow must explicitly enable" />
-          <Action label="Restart add-on" status="missing" source="No v0 command authority" />
+          <Action label="Restart app" status="missing" source="No v0 command authority" />
           <Action label="Release device" status="backed" source="device lifecycle + audit_events" />
         </Section>
       </TwoColumn>
@@ -652,7 +652,7 @@ function Updates() {
           <Field label="Binary install over IoT" value="Not v0" status="missing" source="update-architecture.md" />
           <Field label="Artifact/download URL in shadow" value="Not allowed" status="missing" source="edge-state-adapter.md" />
           <Field label="Local-supervisor apply command" value="Future only" status="future" source="command-lifecycle.md" />
-          <Field label="Unsupported add-on versions visible in UI" value="Required" status="backed" source="migration-strategy.md" />
+          <Field label="Unsupported app versions visible in UI" value="Required" status="backed" source="migration-strategy.md" />
         </Section>
       </TwoColumn>
     </Screen>
@@ -664,7 +664,7 @@ function Diagnostics() {
     <Screen title="Diagnostics" subtitle="Bounded support/debug capture, not arbitrary host access.">
       <TwoColumn>
         <Section title="Diagnostic capabilities">
-          <Action label="Collect add-on status" status="backed" source="local-cloud-trust-boundaries.md" />
+          <Action label="Collect app status" status="backed" source="local-cloud-trust-boundaries.md" />
           <Action label="Collect connectivity check" status="backed" source="local-cloud-trust-boundaries.md" />
           <Action label="Collect recent error excerpt" status="backed" source="5 KB bounded excerpt" />
           <Action label="Request debug bundle" status="conditional" source="Diagnostics/Debug flow must explicitly enable artifact upload" />
@@ -730,29 +730,29 @@ function Admin() {
   );
 }
 
-function HaAddon() {
+function HaApp() {
   return (
-    <Screen title="Home Assistant add-on mock" subtitle="Local add-on UI inside Home Assistant, not the SaaS portal.">
+    <Screen title="Home Assistant app mock" subtitle="Local app UI inside Home Assistant, not the SaaS portal.">
       <TwoColumn>
         <Section title="Local claim status">
-          <Field label="Local state" value={haAddonState.local_state} status="backed" source="/config/device.json" />
-          <Field label="Device ID" value={haAddonState.device_id} status="backed" source="/config/device.json" />
-          <Field label="Thing name" value={haAddonState.thing_name} status="backed" source="/config/device.json" />
-          <Field label="Certificate path" value={haAddonState.cert_path} status="backed" source="/config/iot/*" />
+          <Field label="Local state" value={haAppState.local_state} status="backed" source="/config/device.json" />
+          <Field label="Device ID" value={haAppState.device_id} status="backed" source="/config/device.json" />
+          <Field label="Thing name" value={haAppState.thing_name} status="backed" source="/config/device.json" />
+          <Field label="Certificate path" value={haAppState.cert_path} status="backed" source="/config/iot/*" />
           <Field label="Private key path" value="Stored locally, never shown" status="backed" source="/config/iot/*" />
         </Section>
 
         <Section title="Local operational status">
-          <Field label="Cloud connection" value={haAddonState.cloud_connection} status="backed" source="local status + telemetry" />
-          <Field label="Active publish policy" value={haAddonState.last_policy_version} status="backed" source="homesignal_edge.publish_policy" />
-          <Field label="Installed add-on version" value={haAddonState.addon_version} status="backed" source="local observation + reported.update" />
-          <Field label="Desired add-on version" value={haAddonState.desired_addon_version} status="backed" source="homesignal_edge.update" />
+          <Field label="Cloud connection" value={haAppState.cloud_connection} status="backed" source="local status + telemetry" />
+          <Field label="Active publish policy" value={haAppState.last_policy_version} status="backed" source="homesignal_edge.publish_policy" />
+          <Field label="Installed app version" value={haAppState.ha_app_version} status="backed" source="local observation + reported.update" />
+          <Field label="Desired app version" value={haAppState.desired_ha_app_version} status="backed" source="homesignal_edge.update" />
           <Field label="Support debug mode toggle" value="Cloud-authorized only" status="conditional" source="observability.md" />
           <Field label="Manual raw file upload" value="Not allowed" status="missing" source="artifact upload boundary" />
         </Section>
       </TwoColumn>
 
-      <Section title="Unclaimed add-on screen">
+      <Section title="Unclaimed app screen">
         <Field label="Claim invite code" value="Entered locally when unclaimed" status="backed" source="device_claim_invites" />
         <Field label="Verification token" value="Stored secret file; never shown" status="backed" source="enrollment-claiming-contract.md" />
         <Field label="Recognition signals" value="HA UUID, machine ID, versions, hostname" status="backed" source="recognition_signals" />

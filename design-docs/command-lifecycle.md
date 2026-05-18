@@ -6,8 +6,8 @@ Commands are ACK-required cloud-to-device instructions. Notifications are fire-a
 
 ## Principles
 
-- ACK means the add-on accepted or rejected the command, not merely that a packet arrived.
-- ACK should arrive quickly enough to prove the add-on is alive and understood the request.
+- ACK means the app accepted or rejected the command, not merely that a packet arrived.
+- ACK should arrive quickly enough to prove the app is alive and understood the request.
 - Terminal result is separate from ACK because some commands take much longer than the acceptance window.
 - Progress updates are opt-in by command type.
 - Desired-state convergence is a related but separate state-management concern.
@@ -31,8 +31,8 @@ Default semantics:
 | --- | --- |
 | `queued` | Cloud accepted the request and created a durable command record. |
 | `sent` | Cloud attempted delivery to the device transport. |
-| `ack_accepted` | Add-on received, validated, and agreed to attempt the command. |
-| `ack_rejected` | Add-on received and rejected the command with a bounded reason code. |
+| `ack_accepted` | App received, validated, and agreed to attempt the command. |
+| `ack_rejected` | App received and rejected the command with a bounded reason code. |
 | `ack_timed_out` | No accepted/rejected ACK arrived inside the ACK window. |
 | `running` / `progress` | Optional command-specific execution update. |
 | `succeeded` | Command reached terminal success. |
@@ -143,8 +143,8 @@ Example:
 desired state: device active publish policy is pp_124
 shadow desired: publish_policy.version is pp_124
 optional command: refresh_publish_policy
-ACK: add-on accepted/rejected the refresh request within 15 seconds
-convergence: add-on reports applied policy version pp_124 through edge-state projection
+ACK: app accepted/rejected the refresh request within 15 seconds
+convergence: app reports applied policy version pp_124 through edge-state projection
 ```
 
 If convergence matters, track it separately from command delivery:
@@ -171,7 +171,7 @@ Not every state-affecting change is a command, and not every command changes des
 Use durable desired state for targets that should remain true until changed:
 
 - active publish policy version
-- desired agent/add-on/supervisor version
+- desired agent/app/supervisor version
 - device suspended/revoked/released lifecycle authority
 - backup schedule or policy
 - remote access enabled/configured policy
@@ -198,9 +198,9 @@ progress/result: bounded status/repair phases and terminal outcome
 convergence: reported agent version becomes 1.8.3
 ```
 
-In v0, HomeSignal does not deliver binary update artifacts or initiate add-on
-installation over IoT Core. Normal HomeSignal add-on update execution remains
-with the local Home Assistant Supervisor/add-on update path. Command-class update
+In v0, HomeSignal does not deliver binary update artifacts or initiate app
+installation over IoT Core. Normal HomeSignal app update execution remains
+with the local Home Assistant Supervisor/app update path. Command-class update
 work is limited to explicitly modeled bounded checks, status, repair, or future
 apply flows.
 

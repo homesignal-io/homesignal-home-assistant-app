@@ -1,6 +1,6 @@
 # Secrets And Config Workstream
 
-Secrets and config policy covers cloud runtime secrets, local add-on secret files, non-secret configuration, rotation, redaction, and cleanup.
+Secrets and config policy covers cloud runtime secrets, local app secret files, non-secret configuration, rotation, redaction, and cleanup.
 
 ## Agent Use
 
@@ -8,9 +8,9 @@ Read this when touching:
 
 - environment variables
 - runtime config loaders
-- cloud-provisioned add-on policy/config
+- cloud-provisioned app policy/config
 - AWS Secrets Manager or SSM Parameter Store
-- local add-on secret files
+- local app secret files
 - certificates or private keys
 - claim invite codes or claim verification tokens
 - logs around credentials
@@ -68,7 +68,7 @@ Staging database:
 - treat the first Neon account/project/database creation as an operator
   prerequisite; after creation, migrations can run through `scripts/migrate.sh`
 
-Home Assistant add-on:
+Home Assistant app:
 
 - store metadata in `/config/device.json`
 - store secret material in separate `0600` files

@@ -107,7 +107,7 @@ store enough state for support and future UI design, but the customer-facing UI
 should not expose raw internals such as policy drift, command no-ACK,
 convergence windows, or Platform Health findings.
 
-Near-term product surfaces may show simple device/add-on status derived from
+Near-term product surfaces may show simple device/app status derived from
 latest telemetry and presence, such as healthy, disconnected, updating, backup
 failing, or needs attention. Detailed causes, operator notes, debug sessions,
 policy convergence state, and no-ACK behavior remain internal/support-visible
@@ -193,7 +193,7 @@ not a customer self-service toggle.
 
 Purpose:
 
-- temporarily increase add-on diagnostic detail for one device or site
+- temporarily increase app diagnostic detail for one device or site
 - capture bounded logs, message samples, command traces, health checks, and
   local environment facts needed for support/debugging
 - ship larger debug output through the approved artifact upload path
@@ -210,7 +210,7 @@ Ownership:
   stop a debug session.
 - Command Service delivers the bounded debug command and tracks ACK/result.
 - Artifact Upload Broker handles any debug bundle upload.
-- Add-on enforces local debug policy, TTL, redaction, rate limits, and upload
+- App enforces local debug policy, TTL, redaction, rate limits, and upload
   recursion guards.
 - App DB stores debug session state, command IDs, artifact IDs, audit records,
   and status.
@@ -223,9 +223,9 @@ operator/support actor requests debug session
   -> AuthorizationService authorizes internal/support debug action
   -> Diagnostics creates debug_session row with device/site scope and TTL
   -> Command Service sends enable_debug_capture command over IoT Core
-  -> add-on ACKs accepted/rejected through Agent HTTPS
-  -> add-on captures bounded debug detail until expires_at or stop command
-  -> add-on emits small summaries through normal telemetry/event path
+  -> app ACKs accepted/rejected through Agent HTTPS
+  -> app captures bounded debug detail until expires_at or stop command
+  -> app emits small summaries through normal telemetry/event path
   -> larger bundles use Artifact Upload Broker and S3
   -> command result/debug session status update App DB
 ```
@@ -242,7 +242,7 @@ V0 rules:
 - Debug output must be redacted before upload and must never include private
   keys, claim invite codes, tokens, signed URLs, cookies, raw secrets, or full local
   config dumps.
-- The add-on must automatically turn debug mode off at expiry even if cloud is
+- The app must automatically turn debug mode off at expiry even if cloud is
   unreachable.
 - Debug mode must have local rate/size limits so it cannot create a device-side
   or cloud-side cost storm.

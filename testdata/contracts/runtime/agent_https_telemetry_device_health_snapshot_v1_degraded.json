@@ -66,9 +66,9 @@
         "last_checked_at": "2026-05-14T12:59:30Z"
       }
     },
-    "addons": [
+    "ha_apps": [
       {
-        "addon_id": null,
+        "ha_app_id": null,
         "slug": "alarm_bridge",
         "display_name": "Alarm Bridge",
         "repository": "local",
